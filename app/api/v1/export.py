@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_async_db
 from app.services.export_data_service import AsyncExportDataService
@@ -36,8 +36,18 @@ def _check_rate_limit(client_id: str = "default"):
     _request_timestamps[client_id].append(current_time)
 
 @router.get("/seasonal-trend", response_model=SeasonalTrendResponse)
-async def get_seasonal_trend(db: AsyncSession = Depends(get_async_db)):
-    """Get seasonal trend data for the latest quarter"""
+async def get_seasonal_trend(
+    endDate: str = None,
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Get seasonal trend data for a specific quarter.
+    Results are sorted by growth percentage from highest to lowest.
+    
+    Args:
+        endDate: End date in DD-MM-YYYY format (e.g., 31-03-2025 for Q1 2025)
+                 If not provided, uses the latest available quarter
+    """
     start_time = time.time()
     
     try:
@@ -49,7 +59,7 @@ async def get_seasonal_trend(db: AsyncSession = Depends(get_async_db)):
         
         # Set timeout for the operation using configuration
         result = await asyncio.wait_for(
-            export_service.get_seasonal_trend(),
+            export_service.get_seasonal_trend(endDate),
             timeout=settings.QUERY_TIMEOUT
         )
         
@@ -73,10 +83,24 @@ async def get_seasonal_trend(db: AsyncSession = Depends(get_async_db)):
         )
 
 @router.get("/country-demand", response_model=CountryDemandResponse)
-async def get_country_demand(db: AsyncSession = Depends(get_async_db)):
+async def get_country_demand(
+    endDate: str = None,
+    db: AsyncSession = Depends(get_async_db)
+):
     """
-    Get all commodities for top 20 countries with growth calculations.
-    Countries are ranked by total transaction value in the latest quarter.
+    Get all commodities for top 20 countries with growth calculations and prices.
+    Countries are sorted by growth percentage from highest to lowest.
+    Products within each country are also sorted by growth percentage from highest to lowest.
+    Growth is calculated month-over-month (comparing to the previous month).
+    Each product includes price and growth information for that commodity in that country.
+    Transaction values are converted from USD to IDR using the latest exchange rate.
+    
+    Args:
+        endDate: End date in DD-MM-YYYY format (e.g., 31-03-2025 for Q1 2025)
+                 If not provided, uses the latest available quarter
+                 
+    Returns:
+        Returns empty data array if no data exists for the specified quarter
     """
     start_time = time.time()
     
@@ -87,22 +111,17 @@ async def get_country_demand(db: AsyncSession = Depends(get_async_db)):
         # Add timeout for the entire operation
         export_service = AsyncExportDataService(db)
         
-        # Set timeout for the operation using configuration
+        # Set timeout for the operation using configuration (increased for complex query)
         result = await asyncio.wait_for(
-            export_service.get_country_demand(),
-            timeout=settings.QUERY_TIMEOUT
+            export_service.get_country_demand(endDate),
+            timeout=settings.QUERY_TIMEOUT * 2  # Double timeout for this complex operation
         )
         
         # Log performance metrics
         execution_time = time.time() - start_time
         print(f"Country demand query executed in {execution_time:.2f} seconds")
         
-        if not result['data']:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No data found or no data available"
-            )
-        
+        # Return empty result instead of 404 - this is valid when no data exists for the date
         return result
         
     except asyncio.TimeoutError:
@@ -118,4 +137,58 @@ async def get_country_demand(db: AsyncSession = Depends(get_async_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error. Please try again later."
+        ) 
+
+@router.get("/top-commodity-by-country")
+async def get_top_commodity_by_country(
+    endDate: str = Query(None, description="End date in DD-MM-YYYY format (e.g., 31-12-2024)"),
+    countryId: str = Query(None, description="Country ID to filter by (e.g., US, CN, ID)"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Get the top commodity from every country with optional date and country filtering.
+    Returns the commodity with the highest growth percentage for each country.
+    Countries are sorted by their top commodity's growth percentage from highest to lowest.
+    
+    Args:
+        endDate: End date in DD-MM-YYYY format (e.g., 31-12-2024)
+                 If not provided, uses the latest available data
+        countryId: Country ID to filter by (e.g., US, CN, ID)
+                  If not provided, returns data for all countries
+                  
+    Returns:
+        List of countries with their top commodity (by growth percentage) information
+    """
+    start_time = time.time()
+    
+    try:
+        # Rate limiting using configuration
+        _check_rate_limit()
+        
+        # Add timeout for the entire operation
+        export_service = AsyncExportDataService(db)
+        
+        # Set timeout for the operation using configuration
+        result = await asyncio.wait_for(
+            export_service.get_top_commodity_by_country(endDate, countryId),
+            timeout=settings.QUERY_TIMEOUT
+        )
+        
+        # Log performance metrics
+        execution_time = time.time() - start_time
+        print(f"Top commodity by country query executed in {execution_time:.2f} seconds")
+        
+        return result
+        
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Request timeout. Please try again."
+        )
+    except Exception as e:
+        # Log error for monitoring
+        print(f"Error in top commodity by country endpoint: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
         ) 

@@ -16,6 +16,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import text
 import numpy as np
 from app.services.export_duty_service import ExportDutyService
+from app.services.export_document_service import ExportDocumentService
 import json
 import re
 import asyncio
@@ -98,7 +99,7 @@ async def get_dynamic_prompt_from_db_optimized(query: str, db: AsyncSession) -> 
         # Create embedding for user query
         query_embedding = await create_embedding_optimized(query)
         if not query_embedding:
-            return get_default_extraction_prompt(), 0.0
+            return await get_default_extraction_prompt_from_db(db), 0.0
         
         # Search for most similar prompt with 70% threshold
         service = PromptLibraryService(db)
@@ -112,53 +113,20 @@ async def get_dynamic_prompt_from_db_optimized(query: str, db: AsyncSession) -> 
             return result_tuple
         else:
             print(f"[DYNAMIC PROMPT] No prompt found with similarity > 70%")
-            result_tuple = (get_default_extraction_prompt(), 0.0)
+            result_tuple = (await get_default_extraction_prompt_from_db(db), 0.0)
             _prompt_cache[cache_key] = result_tuple
             return result_tuple
             
     except Exception as e:
         print(f"Error in dynamic prompt selection: {e}")
-        return get_default_extraction_prompt(), 0.0
+        return await get_default_extraction_prompt_from_db(db), 0.0
 
-def get_default_extraction_prompt() -> str:
-    """Default extraction prompt if no dynamic prompt is found"""
-    return """
-    Kamu adalah ExportMate, asisten AI ekspor yang membantu menghitung estimasi bea keluar (pajak ekspor) berdasarkan regulasi yang berlaku di Indonesia.
-
-    Tugasmu adalah:
-    1. Mengekstrak informasi penting dari pernyataan pengguna dalam bentuk teks bebas.
-    2. Menjelaskan perhitungan estimasi bea keluar berdasarkan rumus yang berlaku, jika semua informasi telah tersedia.
-
-    Pertama, ekstrak dan tampilkan 3 informasi berikut secara eksplisit dalam format JSON:
-    - nama_produk: nama komoditas atau barang yang akan diekspor (contoh: Crude Palm Oil, Karet, Kopi)
-    - berat_bersih_kg: berat bersih produk dalam satuan kilogram (kg)
-    - negara_tujuan: negara tujuan ekspor (contoh: India, Tiongkok, Bangladesh)
-
-    Jika salah satu dari informasi tersebut tidak disebutkan secara eksplisit oleh pengguna, isi nilainya dengan null.
-
-    Gunakan format JSON berikut:
-    {
-    "nama_produk": "...",
-    "berat_bersih_kg": ...,
-    "negara_tujuan": "..."
-    }
-
-    Setelah ekstraksi, jika seluruh informasi tersedia dan relevan, kamu dapat menjelaskan bahwa estimasi bea keluar dihitung berdasarkan rumus berikut:
-
-    Bea Keluar = Tarif Bea Keluar × Harga Ekspor × Jumlah Satuan Barang × Nilai Tukar Mata Uang
-
-    Penjelasan komponen:
-    - **Tarif Bea Keluar**: persentase tertentu yang dikenakan pada harga ekspor, atau tarif spesifik per satuan barang.
-    - **Harga Ekspor**: harga barang yang diekspor, bisa merujuk pada Harga Patokan Ekspor (HPE) yang ditetapkan pemerintah.
-    - **Jumlah Satuan Barang**: total kuantitas barang, misalnya dalam kg atau ton.
-    - **Nilai Tukar Mata Uang**: kurs tengah yang ditetapkan oleh Menteri Keuangan saat ekspor dilakukan.
-
-    Contoh perhitungan:
-    Jika perusahaan mengekspor 10 ton biji kakao dengan harga ekspor USD 2.000 per ton, tarif bea keluar 5%, dan nilai tukar Rp10.000 per USD, maka:
-    - Total harga ekspor: 10 × 2.000 = USD 20.000
-    - Dalam Rupiah: 20.000 × 10.000 = Rp200.000.000
-    - Bea Keluar: 5% × Rp200.000.000 = Rp10.000.000
-    """
+async def get_default_extraction_prompt_from_db(db: AsyncSession) -> str:
+    result = await db.execute(select(PromptLibrary).where(PromptLibrary.is_default == True))
+    prompt = result.scalar_one_or_none()
+    if prompt:
+        return prompt.prompt_template
+    return "Prompt default tidak tersedia. Silakan hubungi admin."
 
 async def extract_data_from_query_optimized(query: str, db: AsyncSession) -> dict:
     """
@@ -259,6 +227,60 @@ async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db
     openai.api_key = os.getenv("OPENAI_API_KEY")
     
     try:
+        # Intent detection
+        document_service = ExportDocumentService(db)
+        intent = document_service.detect_intent_and_action(query)
+
+        if intent == "document_template":
+            # Get document templates for the query
+            document_result = await document_service.get_export_documents_response(query, show_template=True)
+            templates = []
+            if document_result["success"] and document_result["documents_with_templates"]:
+                for doc in document_result["documents_with_templates"]:
+                    if doc.get("template") and doc["template"].get("template_dokumen"):
+                        templates.append({
+                            "name": doc["document_name"],
+                            "html_template": doc["template"]["template_dokumen"]
+                        })
+                execution_time = time.time() - start_time
+                if len(templates) == 1:
+                    return {
+                        "answer": f"Berikut adalah template dokumen {templates[0]['name']} untuk ekspor. Silakan lengkapi bagian yang kosong.",
+                        "html_template": templates[0]["html_template"],
+                        "success": True,
+                        "execution_time": execution_time
+                    }
+                elif len(templates) > 1:
+                    return {
+                        "answer": "Mohon minta satu dokumen saja dalam satu waktu. Silakan sebutkan dokumen yang ingin dibuat.",
+                        "html_template": "",
+                        "success": False,
+                        "execution_time": execution_time
+                    }
+                else:
+                    return {
+                        "answer": "Maaf, template dokumen yang Anda minta tidak tersedia atau belum ada data untuk negara tersebut.",
+                        "html_template": "",
+                        "success": False,
+                        "execution_time": execution_time
+                    }
+            else:
+                execution_time = time.time() - start_time
+                return {
+                    "answer": "Maaf, template dokumen yang Anda minta tidak tersedia atau belum ada data untuk negara tersebut.",
+                    "html_template": "",
+                    "success": False,
+                    "execution_time": execution_time
+                }
+        elif intent == "document_list":
+            document_result = await document_service.get_export_documents_response(query, show_template=False)
+            execution_time = time.time() - start_time
+            return {
+                "answer": document_result["message"],
+                "success": document_result["success"],
+                "execution_time": execution_time
+            }
+        
         # Optimized embedding creation
         query_embedding = await create_embedding_optimized(query)
         if not query_embedding:
@@ -272,7 +294,7 @@ async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db
             # Use default prompt when no similar prompt is found
             prompt = PromptLibrary(
                 id=0,
-                prompt_template=get_default_extraction_prompt(),
+                prompt_template=await get_default_extraction_prompt_from_db(db),
                 is_active=True
             )
             similarity = 0.0
@@ -294,8 +316,60 @@ async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db
         )
         jawaban = response.choices[0].message.content.strip()
 
-        # Deteksi intent (misal: prompt.id == id prompt bea keluar, atau pakai keyword di prompt_template)
-        if "bea" in prompt.prompt_template.lower() or "pajak" in prompt.prompt_template.lower() or "cukai" in prompt.prompt_template.lower():
+        # Deteksi intent untuk membuat dokumen tertentu (template preview)
+        if any(keyword in query.lower() for keyword in ["buat", "buatkan", "generate", "tampilkan", "show", "lihat", "preview"]) and any(keyword in query.lower() for keyword in ["invoice", "packing", "list", "dokumen", "surat", "form"]):
+            try:
+                document_service = ExportDocumentService(db)
+                document_result = await document_service.get_export_documents_response(query, show_template=True)
+                
+                if document_result["success"] and document_result["documents_with_templates"]:
+                    execution_time = time.time() - start_time
+                    return {
+                        "answer": document_result["message"],
+                        "similarity": similarity,
+                        "prompt_id": prompt.id,
+                        "execution_time": execution_time
+                    }
+                else:
+                    execution_time = time.time() - start_time
+                    return {
+                        "answer": "Maaf, template dokumen yang Anda minta tidak tersedia atau belum ada data untuk negara tersebut.",
+                        "similarity": similarity,
+                        "prompt_id": prompt.id,
+                        "execution_time": execution_time
+                    }
+            except Exception as e:
+                execution_time = time.time() - start_time
+                return {
+                    "answer": f"Terjadi kesalahan dalam pembuatan dokumen: {str(e)}",
+                    "similarity": similarity,
+                    "prompt_id": prompt.id,
+                    "execution_time": execution_time
+                }
+        # Deteksi intent untuk daftar dokumen ekspor (tanpa template)
+        elif any(keyword in query.lower() for keyword in ["dokumen", "document", "surat", "form", "template", "persyaratan"]):
+            try:
+                document_service = ExportDocumentService(db)
+                document_result = await document_service.get_export_documents_response(query, show_template=False)
+                
+                execution_time = time.time() - start_time
+                return {
+                    "answer": document_result["message"],
+                    "similarity": similarity,
+                    "prompt_id": prompt.id,
+                    "execution_time": execution_time
+                }
+            except Exception as e:
+                execution_time = time.time() - start_time
+                return {
+                    "answer": f"Terjadi kesalahan dalam pencarian dokumen: {str(e)}",
+                    "similarity": similarity,
+                    "prompt_id": prompt.id,
+                    "execution_time": execution_time
+                }
+        
+        # Deteksi intent untuk bea keluar (existing logic)
+        elif "bea" in prompt.prompt_template.lower() or "pajak" in prompt.prompt_template.lower() or "cukai" in prompt.prompt_template.lower():
             # Ekstrak data dari query user menggunakan AI dengan dynamic prompt
             extracted_data = await extract_data_from_query_optimized(query, db)
             

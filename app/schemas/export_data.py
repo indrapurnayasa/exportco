@@ -74,7 +74,8 @@ class SeasonalTrendResponse(BaseModel):
 class ProductInfo(BaseModel):
     id: str
     name: str
-    growth: float
+    price: str  # Price in Indonesian Rupiah format (e.g., "Rp 25.000/kg")
+    growth: float  # Growth percentage for this commodity in this country
 
 class CountryDemandData(BaseModel):
     countryId: str

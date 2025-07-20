@@ -1,103 +1,98 @@
+#!/usr/bin/env python3
 """
-Script untuk menambahkan data kurs mata uang ke database
+Script to add sample USD to IDR exchange rates for testing.
+Run this script to add currency rate data if needed for testing.
 """
 
 import asyncio
-import os
-import sys
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import date, datetime
+from sqlalchemy import text
 from app.db.database import get_async_db
 from app.models.currency_rates import CurrencyRates
-from sqlalchemy import select
-from datetime import date, datetime
 
-async def add_currency_rates():
-    """Add sample currency rates to currency_rates table"""
-    
-    # Sample currency rate data
-    currency_rates_data = [
-        {
-            "base_currency": "IDR",
-            "target_currency": "USD",
-            "rate": 0.000064,  # 1 IDR = 0.000064 USD (approximately 1 USD = 15,625 IDR)
-            "rate_date": date(2024, 1, 15)
-        },
-        {
-            "base_currency": "IDR", 
-            "target_currency": "USD",
-            "rate": 0.000065,  # 1 IDR = 0.000065 USD (approximately 1 USD = 15,385 IDR)
-            "rate_date": date(2024, 2, 15)
-        },
-        {
-            "base_currency": "IDR",
-            "target_currency": "USD", 
-            "rate": 0.000066,  # 1 IDR = 0.000066 USD (approximately 1 USD = 15,152 IDR)
-            "rate_date": date(2024, 3, 15)
-        },
-        {
-            "base_currency": "USD",
-            "target_currency": "IDR",
-            "rate": 15625.0,  # 1 USD = 15,625 IDR
-            "rate_date": date(2024, 1, 15)
-        },
-        {
-            "base_currency": "USD",
-            "target_currency": "IDR",
-            "rate": 15385.0,  # 1 USD = 15,385 IDR
-            "rate_date": date(2024, 2, 15)
-        },
-        {
-            "base_currency": "USD",
-            "target_currency": "IDR",
-            "rate": 15152.0,  # 1 USD = 15,152 IDR
-            "rate_date": date(2024, 3, 15)
-        }
-    ]
-    
-    try:
-        # Get database session
+async def add_sample_currency_rates():
+    """Add sample USD to IDR exchange rates"""
         async for db in get_async_db():
             try:
-                # Check if currency rates already exist
-                result = await db.execute(select(CurrencyRates))
-                existing_rates = result.scalars().all()
+            print("Adding sample USD to IDR exchange rates...")
+            
+            # Check if rates already exist
+            result = await db.execute(
+                text("SELECT COUNT(*) FROM currency_rates WHERE base_currency = 'USD' AND target_currency = 'IDR'")
+            )
+            existing_count = result.scalar()
                 
-                if existing_rates:
-                    print(f"✅ Currency rates already exist ({len(existing_rates)} records)")
-                    print("   Sample records:")
-                    for rate in existing_rates[:3]:
-                        print(f"   - {rate.base_currency} to {rate.target_currency}: {rate.rate} (date: {rate.rate_date})")
+            if existing_count > 0:
+                print(f"✅ {existing_count} USD to IDR exchange rates already exist")
                     return
                 
-                # Add new currency rates
-                for rate_data in currency_rates_data:
-                    new_rate = CurrencyRates(
-                        base_currency=rate_data["base_currency"],
-                        target_currency=rate_data["target_currency"],
-                        rate=rate_data["rate"],
-                        rate_date=rate_data["rate_date"],
+            # Add sample rates for the last 30 days
+            sample_rates = [
+                {"rate": 15500.00, "date": date.today()},
+                {"rate": 15450.00, "date": date.today()},
+                {"rate": 15600.00, "date": date.today()},
+                {"rate": 15400.00, "date": date.today()},
+                {"rate": 15550.00, "date": date.today()},
+            ]
+            
+            for rate_data in sample_rates:
+                currency_rate = CurrencyRates(
+                    base_currency='USD',
+                    target_currency='IDR',
+                    rate=rate_data['rate'],
+                    rate_date=rate_data['date'],
                         created_at=datetime.now()
                     )
-                    db.add(new_rate)
+                db.add(currency_rate)
                 
                 await db.commit()
-                
-                print(f"✅ Berhasil menambahkan {len(currency_rates_data)} currency rates")
-                print("   Sample rates added:")
-                for rate_data in currency_rates_data[:3]:
-                    print(f"   - {rate_data['base_currency']} to {rate_data['target_currency']}: {rate_data['rate']} (date: {rate_data['rate_date']})")
+            print("✅ Sample USD to IDR exchange rates added successfully!")
+            print(f"   Added {len(sample_rates)} exchange rates")
+            print("   Latest rate: 1 USD = 15,500 IDR")
                 
             except Exception as e:
                 print(f"❌ Error adding currency rates: {e}")
                 await db.rollback()
             finally:
-                await db.close()
                 break
+
+async def check_currency_rates():
+    """Check existing currency rates"""
+    async for db in get_async_db():
+        try:
+            result = await db.execute(
+                text("""
+                    SELECT base_currency, target_currency, rate, rate_date, created_at
+                    FROM currency_rates 
+                    WHERE base_currency = 'USD' AND target_currency = 'IDR'
+                    ORDER BY rate_date DESC, created_at DESC
+                    LIMIT 5
+                """)
+            )
+            
+            rates = result.fetchall()
+            print(f"\n📊 Current USD to IDR Exchange Rates ({len(rates)} found):")
+            for rate in rates:
+                print(f"   {rate.rate_date}: 1 {rate.base_currency} = {rate.rate:,.2f} {rate.target_currency}")
                 
     except Exception as e:
-        print(f"❌ Database connection error: {e}")
+            print(f"❌ Error checking currency rates: {e}")
+        finally:
+            break
 
 if __name__ == "__main__":
-    print("🔄 Adding currency rates to database...")
-    asyncio.run(add_currency_rates())
-    print("✅ Done!") 
+    print("Currency Rates Management")
+    print("=" * 40)
+    
+    # Check existing rates first
+    asyncio.run(check_currency_rates())
+    
+    # Ask user if they want to add sample rates
+    response = input("\nDo you want to add sample USD to IDR exchange rates? (y/n): ").lower().strip()
+    
+    if response in ['y', 'yes']:
+        asyncio.run(add_sample_currency_rates())
+    else:
+        print("Skipping currency rate creation.")
+    
+    print("\nNote: The country demand endpoint will use the latest USD to IDR exchange rate for currency conversion.") 
