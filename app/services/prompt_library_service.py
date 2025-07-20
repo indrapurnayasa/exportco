@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, cast
+from sqlalchemy import select, func, cast, update
 from sqlalchemy.orm import selectinload
 from pgvector.sqlalchemy import Vector
 from typing import List, Optional, Tuple
@@ -9,6 +9,12 @@ import numpy as np
 from sqlalchemy import text
 import asyncio
 from functools import lru_cache
+import logging
+from datetime import datetime
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class PromptLibraryService:
     def __init__(self, db: AsyncSession):
@@ -76,6 +82,33 @@ class PromptLibraryService:
         await self.db.commit()
         return True
 
+    async def log_prompt_usage(self, prompt_id: int, user_query: str, similarity: float, response_type: str = "chatbot"):
+        """
+        Log prompt usage and update usage count
+        """
+        try:
+            # Update usage count
+            stmt = update(PromptLibrary).where(PromptLibrary.id == prompt_id).values(
+                usage_count=PromptLibrary.usage_count + 1,
+                updated_at=datetime.utcnow()
+            )
+            await self.db.execute(stmt)
+            await self.db.commit()
+            
+            # Clear cache for this prompt
+            cache_key = f"prompt_{prompt_id}"
+            if cache_key in self._cache:
+                del self._cache[cache_key]
+            
+            # Log the usage
+            logger.info(f"[PROMPT USAGE] Prompt ID: {prompt_id}, Query: '{user_query[:100]}...', Similarity: {similarity:.3f}, Type: {response_type}")
+            
+            # You can also log to a separate table if needed
+            # await self._log_to_usage_table(prompt_id, user_query, similarity, response_type)
+            
+        except Exception as e:
+            logger.error(f"Error logging prompt usage: {e}")
+
     async def get_most_similar_prompt_optimized(self, query_embedding: List[float], threshold: float = 0.7) -> Optional[Tuple[PromptLibrary, float]]:
         """
         Optimized similarity search with caching and reduced database queries
@@ -112,13 +145,13 @@ class PromptLibraryService:
                             best_prompt = prompt
             
             if best_prompt:
-                print(f"[SIMILARITY SEARCH] Found prompt {best_prompt.id} with similarity: {best_similarity:.3f}")
+                logger.info(f"[SIMILARITY SEARCH] Found prompt {best_prompt.id} with similarity: {best_similarity:.3f}")
                 return best_prompt, best_similarity
 
             return None
 
         except Exception as e:
-            print(f"Error in similarity search: {e}")
+            logger.error(f"Error in similarity search: {e}")
             return None
 
     async def get_most_similar_prompt(self, query_embedding: List[float], threshold: float = 0.7) -> Optional[Tuple[PromptLibrary, float]]:
@@ -126,8 +159,6 @@ class PromptLibraryService:
         Get most similar prompt using vector similarity search
         """
         return await self.get_most_similar_prompt_optimized(query_embedding, threshold)
-
-
 
     async def get_active_prompts(self) -> List[PromptLibrary]:
         """Get all active prompts with caching"""

@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.db.database import get_async_db
 from app.services.prompt_library_service import PromptLibraryService
+from app.services.chain_of_thought_service import ChainOfThoughtService
+from app.services.optimized_chatbot_service import OptimizedChatbotService
 from app.schemas.prompt_library import (
     PromptLibraryCreate, PromptLibraryUpdate, PromptLibraryResponse
 )
@@ -108,11 +110,15 @@ async def get_dynamic_prompt_from_db_optimized(query: str, db: AsyncSession) -> 
         if result:
             prompt, similarity = result
             print(f"[DYNAMIC PROMPT] Found prompt ID: {prompt.id} with similarity: {similarity:.3f}")
+            # Log prompt usage
+            await service.log_prompt_usage(prompt.id, query, similarity, "dynamic_prompt")
             result_tuple = (prompt.prompt_template, similarity)
             _prompt_cache[cache_key] = result_tuple
             return result_tuple
         else:
             print(f"[DYNAMIC PROMPT] No prompt found with similarity > 70%")
+            # Log default prompt usage
+            await service.log_prompt_usage(0, query, 0.0, "default_dynamic_prompt")
             result_tuple = (await get_default_extraction_prompt_from_db(db), 0.0)
             _prompt_cache[cache_key] = result_tuple
             return result_tuple
@@ -222,243 +228,33 @@ def extract_data_manually(text: str) -> dict:
 
 @router.post("/chatbot/")
 async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db)):
-    start_time = time.time()
-    query = payload.query
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    
+    """
+    Optimized chatbot endpoint with minimal delay
+    """
     try:
-        # Intent detection
-        document_service = ExportDocumentService(db)
-        intent = document_service.detect_intent_and_action(query)
-
-        if intent == "document_template":
-            # Get document templates for the query
-            document_result = await document_service.get_export_documents_response(query, show_template=True)
-            templates = []
-            if document_result["success"] and document_result["documents_with_templates"]:
-                for doc in document_result["documents_with_templates"]:
-                    if doc.get("template") and doc["template"].get("template_dokumen"):
-                        templates.append({
-                            "name": doc["document_name"],
-                            "html_template": doc["template"]["template_dokumen"]
-                        })
-                execution_time = time.time() - start_time
-                if len(templates) == 1:
-                    return {
-                        "answer": f"Berikut adalah template dokumen {templates[0]['name']} untuk ekspor. Silakan lengkapi bagian yang kosong.",
-                        "html_template": templates[0]["html_template"],
-                        "success": True,
-                        "execution_time": execution_time
-                    }
-                elif len(templates) > 1:
-                    return {
-                        "answer": "Mohon minta satu dokumen saja dalam satu waktu. Silakan sebutkan dokumen yang ingin dibuat.",
-                        "html_template": "",
-                        "success": False,
-                        "execution_time": execution_time
-                    }
-                else:
-                    return {
-                        "answer": "Maaf, template dokumen yang Anda minta tidak tersedia atau belum ada data untuk negara tersebut.",
-                        "html_template": "",
-                        "success": False,
-                        "execution_time": execution_time
-                    }
-            else:
-                execution_time = time.time() - start_time
-                return {
-                    "answer": "Maaf, template dokumen yang Anda minta tidak tersedia atau belum ada data untuk negara tersebut.",
-                    "html_template": "",
-                    "success": False,
-                    "execution_time": execution_time
-                }
-        elif intent == "document_list":
-            document_result = await document_service.get_export_documents_response(query, show_template=False)
-            execution_time = time.time() - start_time
-            return {
-                "answer": document_result["message"],
-                "success": document_result["success"],
-                "execution_time": execution_time
-            }
+        # Use optimized chatbot service
+        optimized_service = OptimizedChatbotService(db)
+        result = await optimized_service.process_chatbot_query(payload.query)
         
-        # Optimized embedding creation
-        query_embedding = await create_embedding_optimized(query)
-        if not query_embedding:
-            raise HTTPException(status_code=500, detail="Failed to create embedding")
-        
-        # Get most similar prompt for chatbot response
-        service = PromptLibraryService(db)
-        result = await service.get_most_similar_prompt(query_embedding, threshold=0.7)
-        if not result:
-            print(f"[CHATBOT] No similar prompt found (similarity < 0.7), using default prompt")
-            # Use default prompt when no similar prompt is found
-            prompt = PromptLibrary(
-                id=0,
-                prompt_template=await get_default_extraction_prompt_from_db(db),
-                is_active=True
-            )
-            similarity = 0.0
-        else:
-            prompt, similarity = result
-            print(f"[CHATBOT] Using prompt ID: {prompt.id}")
-        
-        # Optimized AI response generation
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = await asyncio.to_thread(
-            client.chat.completions.create,
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": prompt.prompt_template.strip()},
-                {"role": "user", "content": payload.query}
-            ],
-            temperature=0.7,
-            max_tokens=400  # Reduced for faster response
-        )
-        jawaban = response.choices[0].message.content.strip()
-
-        # Deteksi intent untuk membuat dokumen tertentu (template preview)
-        if any(keyword in query.lower() for keyword in ["buat", "buatkan", "generate", "tampilkan", "show", "lihat", "preview"]) and any(keyword in query.lower() for keyword in ["invoice", "packing", "list", "dokumen", "surat", "form"]):
+        # Add prompt logging if available
+        if "prompt_id" in result and result.get("cot_analysis"):
             try:
-                document_service = ExportDocumentService(db)
-                document_result = await document_service.get_export_documents_response(query, show_template=True)
-                
-                if document_result["success"] and document_result["documents_with_templates"]:
-                    execution_time = time.time() - start_time
-                    return {
-                        "answer": document_result["message"],
-                        "similarity": similarity,
-                        "prompt_id": prompt.id,
-                        "execution_time": execution_time
-                    }
-                else:
-                    execution_time = time.time() - start_time
-                    return {
-                        "answer": "Maaf, template dokumen yang Anda minta tidak tersedia atau belum ada data untuk negara tersebut.",
-                        "similarity": similarity,
-                        "prompt_id": prompt.id,
-                        "execution_time": execution_time
-                    }
+                prompt_service = PromptLibraryService(db)
+                await prompt_service.log_prompt_usage(
+                    prompt_id=result["prompt_id"],
+                    user_query=payload.query,
+                    similarity=result.get("similarity", 0.0),
+                    response_type="optimized_chatbot"
+                )
             except Exception as e:
-                execution_time = time.time() - start_time
-                return {
-                    "answer": f"Terjadi kesalahan dalam pembuatan dokumen: {str(e)}",
-                    "similarity": similarity,
-                    "prompt_id": prompt.id,
-                    "execution_time": execution_time
-                }
-        # Deteksi intent untuk daftar dokumen ekspor (tanpa template)
-        elif any(keyword in query.lower() for keyword in ["dokumen", "document", "surat", "form", "template", "persyaratan"]):
-            try:
-                document_service = ExportDocumentService(db)
-                document_result = await document_service.get_export_documents_response(query, show_template=False)
-                
-                execution_time = time.time() - start_time
-                return {
-                    "answer": document_result["message"],
-                    "similarity": similarity,
-                    "prompt_id": prompt.id,
-                    "execution_time": execution_time
-                }
-            except Exception as e:
-                execution_time = time.time() - start_time
-                return {
-                    "answer": f"Terjadi kesalahan dalam pencarian dokumen: {str(e)}",
-                    "similarity": similarity,
-                    "prompt_id": prompt.id,
-                    "execution_time": execution_time
-                }
+                print(f"[OPTIMIZED] Error logging prompt usage: {e}")
         
-        # Deteksi intent untuk bea keluar (existing logic)
-        elif "bea" in prompt.prompt_template.lower() or "pajak" in prompt.prompt_template.lower() or "cukai" in prompt.prompt_template.lower():
-            # Ekstrak data dari query user menggunakan AI dengan dynamic prompt
-            extracted_data = await extract_data_from_query_optimized(query, db)
-            
-            # Cek apakah semua data diperlukan sudah lengkap
-            if extracted_data["nama_produk"] and extracted_data["berat_bersih_kg"] and extracted_data["negara_tujuan"]:
-                try:
-                    duty_service = ExportDutyService(db)
-                    hasil = await duty_service.calculate_export_duty(
-                        nama_produk=extracted_data["nama_produk"],
-                        berat_bersih=extracted_data["berat_bersih_kg"],
-                        negara_tujuan=extracted_data["negara_tujuan"]
-                    )
-                    
-                    # Format response yang lebih informatif
-                    response_text = f"""
-📊 **HASIL PERHITUNGAN BEA KELUAR EKSPOR**
-
-**Detail Ekspor:**
-• Nama Produk: {hasil['nama_produk']}
-• Berat: {hasil['berat_bersih_kg']} kg ({hasil['berat_ton']:.3f} ton)
-• Negara Tujuan: {hasil['negara_tujuan']}
-
-**Perhitungan Harga:**
-• Harga Ekspor: USD {hasil['harga_ekspor_per_ton_usd']:,.2f}/ton
-• Total Harga Ekspor: USD {hasil['total_harga_ekspor_usd']:,.2f}
-• Kurs USD/IDR: Rp {hasil['kurs_usd_idr']:,.2f}
-• Total Harga dalam Rupiah: Rp {hasil['total_harga_ekspor_idr']:,.2f}
-
-**Perhitungan Bea Keluar:**
-• Tarif Bea Keluar: {hasil['tarif_bea_keluar_persen']:.1f}%
-• **BEA KELUAR: Rp {hasil['bea_keluar_idr']:,.2f}**
-
-**Rumus:** Bea Keluar = Tarif × Harga Ekspor × Jumlah Barang × Nilai Tukar
-"""
-                    
-                    execution_time = time.time() - start_time
-                    print(f"[PERFORMANCE] Total execution time: {execution_time:.2f}s")
-                    
-                    # Gabungkan hasil ke response AI
-                    return {
-                        "answer": response_text,
-                        "similarity": similarity,
-                        "prompt_id": prompt.id,
-                        "extracted_data": extracted_data,
-                        "calculation_details": hasil,
-                        "prompt_similarity": extracted_data.get("prompt_similarity", 0.0),
-                        "execution_time": execution_time
-                    }
-                except Exception as e:
-                    execution_time = time.time() - start_time
-                    return {
-                        "answer": f"Terjadi kesalahan dalam perhitungan: {str(e)}",
-                        "similarity": similarity,
-                        "prompt_id": prompt.id,
-                        "extracted_data": extracted_data,
-                        "execution_time": execution_time
-                    }
-            else:
-                # Jika data belum lengkap, minta user melengkapi dengan detail yang kurang
-                missing_fields = []
-                if not extracted_data["nama_produk"]:
-                    missing_fields.append("nama_produk")
-                if not extracted_data["berat_bersih_kg"]:
-                    missing_fields.append("berat_bersih (kg)")
-                if not extracted_data["negara_tujuan"]:
-                    missing_fields.append("negara_tujuan")
-                
-                missing_text = ", ".join(missing_fields)
-                execution_time = time.time() - start_time
-                return {
-                    "answer": f"Mohon lengkapi data berikut: {missing_text}.",
-                    "similarity": similarity,
-                    "prompt_id": prompt.id,
-                    "extracted_data": extracted_data,
-                    "execution_time": execution_time
-                }
-
-        execution_time = time.time() - start_time
-        return {
-            "answer": jawaban,
-            "similarity": similarity,
-            "execution_time": execution_time
-        }
+        return result
         
     except Exception as e:
-        execution_time = time.time() - start_time
-        print(f"[ERROR] Execution time: {execution_time:.2f}s, Error: {str(e)}")
+        print(f"[OPTIMIZED] Error in chatbot endpoint: {e}")
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 async def get_prompts_with_native_query(db: AsyncSession):
     sql = text("SELECT * FROM prompt_library WHERE is_active = true")
