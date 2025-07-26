@@ -28,7 +28,7 @@ services:
       - .env
     restart: always
     networks:
-      - default
+      - exportco-network
     volumes:
       - ./logs:/app/logs
       - ./backups:/app/backups
@@ -38,3 +38,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+networks:
+  exportco-network:
+    driver: bridge
