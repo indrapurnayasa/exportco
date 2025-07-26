@@ -1,14 +1,54 @@
 version: '3.8'
+
 services:
-  api:
-    image: ${DOCKER_USERNAME}/exportco:latest
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: exportco_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     ports:
-      - "8000:8000"
-    env_file:
-      - .env
+      - "${POSTGRES_PORT}:5432"
     restart: always
     networks:
       - app-network
+
+  # FastAPI Application
+  api:
+    build: .
+    container_name: exportco_api
+    ports:
+      - "${PORT}:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL}
+      - LOG_LEVEL=${LOG_LEVEL}
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    restart: always
+    networks:
+      - app-network
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+
+volumes:
+  postgres_data:
 
 networks:
   app-network:
