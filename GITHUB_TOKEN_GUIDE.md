@@ -158,10 +158,10 @@ Once you have your token:
 ### Example:
 ```bash
 # On your VPS
-git clone https://github.com/YOUR_USERNAME/hackathon-service.git
+git clone https://github.com/YOUR_USERNAME/exportco.git
 
 # When prompted:
-# Username: your-github-username
+# Username: indrapurnayasa
 # Password: your-personal-access-token (NOT your GitHub password!)
 ```
 

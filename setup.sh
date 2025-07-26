@@ -118,8 +118,8 @@ sudo systemctl restart ssh
 
 # Set up log rotation
 echo "📋 Setting up log rotation..."
-sudo tee /etc/logrotate.d/hackathon-service > /dev/null << EOF
-/var/log/hackathon-service/*.log {
+sudo tee /etc/logrotate.d/exportco > /dev/null << EOF
+/var/log/exportco/*.log {
     daily
     missingok
     rotate 52
@@ -128,19 +128,19 @@ sudo tee /etc/logrotate.d/hackathon-service > /dev/null << EOF
     notifempty
     create 644 hackathon hackathon
     postrotate
-        systemctl reload hackathon-service
+        systemctl reload exportco
     endscript
 }
 EOF
 
 # Create application directories
 echo "📁 Creating application directories..."
-sudo mkdir -p /opt/hackathon-service
-sudo mkdir -p /var/log/hackathon-service
-sudo mkdir -p /var/backups/hackathon-service
-sudo chown $USER:$USER /opt/hackathon-service
-sudo chown $USER:$USER /var/log/hackathon-service
-sudo chown $USER:$USER /var/backups/hackathon-service
+sudo mkdir -p /opt/exportco
+sudo mkdir -p /var/log/exportco
+sudo mkdir -p /var/backups/exportco
+sudo chown $USER:$USER /opt/exportco
+sudo chown $USER:$USER /var/log/exportco
+sudo chown $USER:$USER /var/backups/exportco
 
 # Set up monitoring script
 echo "📊 Setting up basic monitoring..."
@@ -148,8 +148,8 @@ sudo tee /usr/local/bin/monitor-service.sh > /dev/null << 'EOF'
 #!/bin/bash
 
 # Basic service monitoring script
-SERVICE_NAME="hackathon-service"
-LOG_FILE="/var/log/hackathon-service/monitor.log"
+SERVICE_NAME="exportco"
+LOG_FILE="/var/log/exportco/monitor.log"
 
 # Check if service is running
 if ! systemctl is-active --quiet $SERVICE_NAME; then
@@ -189,9 +189,9 @@ sudo tee /usr/local/bin/backup-service.sh > /dev/null << 'EOF'
 #!/bin/bash
 
 # Backup script for hackathon service
-BACKUP_DIR="/var/backups/hackathon-service"
+BACKUP_DIR="/var/backups/exportco"
 DATE=$(date +%Y%m%d_%H%M%S)
-SERVICE_DIR="/opt/hackathon-service"
+SERVICE_DIR="/opt/exportco"
 
 # Create backup directory
 mkdir -p $BACKUP_DIR

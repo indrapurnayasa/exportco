@@ -18,7 +18,7 @@ This guide will take you from zero to a fully deployed Hackathon Service on your
 
 ```bash
 # On your local machine
-cd /Users/66371/Documents/BNI/Hackathon\ BI/hackathon-service
+cd /Users/66371/Documents/BNI/Hackathon\ BI/exportco
 
 # Initialize git repository
 git init
@@ -30,7 +30,7 @@ git add .
 git commit -m "Initial commit: Hackathon Service API"
 
 # Add GitHub remote (replace YOUR_USERNAME with your actual GitHub username)
-git remote add origin https://github.com/YOUR_USERNAME/hackathon-service.git
+git remote add origin https://github.com/YOUR_USERNAME/exportco.git
 
 # Set main branch and push
 git branch -M main
@@ -39,9 +39,9 @@ git push -u origin main
 
 ### 1.2 Verify GitHub Repository
 
-1. Go to https://github.com/YOUR_USERNAME/hackathon-service
+1. Go to https://github.com/YOUR_USERNAME/exportco
 2. Confirm your files are uploaded
-3. Note your repository URL: `https://github.com/YOUR_USERNAME/hackathon-service.git`
+3. Note your repository URL: `https://github.com/YOUR_USERNAME/exportco.git`
 
 ---
 
@@ -152,9 +152,9 @@ nginx -v
 git --version
 
 # Check if directories were created
-ls -la /opt/hackathon-service
-ls -la /var/log/hackathon-service
-ls -la /var/backups/hackathon-service
+ls -la /opt/exportco
+ls -la /var/log/exportco
+ls -la /var/backups/exportco
 ```
 
 ---
@@ -165,10 +165,10 @@ ls -la /var/backups/hackathon-service
 
 ```bash
 # Navigate to the application directory
-cd /opt/hackathon-service
+cd /opt/exportco
 
 # Clone your repository
-git clone https://github.com/YOUR_USERNAME/hackathon-service.git .
+git clone https://github.com/YOUR_USERNAME/exportco.git .
 
 # Verify the clone
 ls -la
@@ -305,7 +305,7 @@ curl http://localhost:8000/docs
 
 ```bash
 # Create the service file
-sudo tee /etc/systemd/system/hackathon-service.service > /dev/null << EOF
+sudo tee /etc/systemd/system/exportco.service > /dev/null << EOF
 [Unit]
 Description=Hackathon Service API
 After=network.target postgresql.service
@@ -314,9 +314,9 @@ After=network.target postgresql.service
 Type=exec
 User=hackathon
 Group=hackathon
-WorkingDirectory=/opt/hackathon-service
-Environment=PATH=/opt/hackathon-service/venv/bin
-ExecStart=/opt/hackathon-service/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+WorkingDirectory=/opt/exportco
+Environment=PATH=/opt/exportco/venv/bin
+ExecStart=/opt/exportco/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10
 
@@ -332,13 +332,13 @@ EOF
 sudo systemctl daemon-reload
 
 # Enable the service (start on boot)
-sudo systemctl enable hackathon-service
+sudo systemctl enable exportco
 
 # Start the service
-sudo systemctl start hackathon-service
+sudo systemctl start exportco
 
 # Check service status
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 ```
 
 ---
@@ -349,7 +349,7 @@ sudo systemctl status hackathon-service
 
 ```bash
 # Create Nginx site configuration
-sudo tee /etc/nginx/sites-available/hackathon-service > /dev/null << EOF
+sudo tee /etc/nginx/sites-available/exportco > /dev/null << EOF
 server {
     listen 80;
     server_name 101.50.2.59;
@@ -389,7 +389,7 @@ EOF
 
 ```bash
 # Enable the site
-sudo ln -sf /etc/nginx/sites-available/hackathon-service /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/exportco /etc/nginx/sites-enabled/
 
 # Remove default site
 sudo rm -f /etc/nginx/sites-enabled/default
@@ -433,7 +433,7 @@ sudo ufw status
 
 ```bash
 # Check if service is running
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 
 # Check if Nginx is running
 sudo systemctl status nginx
@@ -459,7 +459,7 @@ curl http://101.50.2.59/api/v1/
 
 ```bash
 # View application logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 
 # View Nginx logs
 sudo tail -f /var/log/nginx/access.log
@@ -477,33 +477,33 @@ sudo journalctl -f
 
 ```bash
 # Edit the .env file
-sudo nano /opt/hackathon-service/.env
+sudo nano /opt/exportco/.env
 
 # Update these important variables:
 # - OPENAI_API_KEY=your-actual-openai-api-key
 # - SECRET_KEY=your-generated-secret-key
 
 # Restart the service after changes
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 ```
 
 ### 10.2 Create Update Script
 
 ```bash
 # Create update script
-cat > /opt/hackathon-service/update.sh << 'EOF'
+cat > /opt/exportco/update.sh << 'EOF'
 #!/bin/bash
-cd /opt/hackathon-service
+cd /opt/exportco
 git pull origin main
 source venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 echo "Update completed successfully!"
 EOF
 
 # Make it executable
-chmod +x /opt/hackathon-service/update.sh
+chmod +x /opt/exportco/update.sh
 ```
 
 ### 10.3 Set Up Monitoring
@@ -516,7 +516,7 @@ ls -la /usr/local/bin/monitor-service.sh
 ls -la /usr/local/bin/backup-service.sh
 
 # View monitoring logs
-tail -f /var/log/hackathon-service/monitor.log
+tail -f /var/log/exportco/monitor.log
 ```
 
 ---
@@ -563,7 +563,7 @@ curl http://101.50.2.59/api/v1/
 
 ```bash
 # On your local machine
-cd /Users/66371/Documents/BNI/Hackathon\ BI/hackathon-service
+cd /Users/66371/Documents/BNI/Hackathon\ BI/exportco
 
 # Make your changes
 # ... edit files ...
@@ -581,7 +581,7 @@ git push origin main
 ssh hackathon@101.50.2.59
 
 # Update the application
-cd /opt/hackathon-service
+cd /opt/exportco
 ./update.sh
 
 # Or manually:
@@ -589,7 +589,7 @@ git pull origin main
 source venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 ```
 
 ---
@@ -601,10 +601,10 @@ sudo systemctl restart hackathon-service
 #### 1. Service Won't Start
 ```bash
 # Check service status
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 
 # View detailed logs
-sudo journalctl -u hackathon-service -n 50
+sudo journalctl -u exportco -n 50
 
 # Check if port is in use
 sudo netstat -tlnp | grep :8000
@@ -637,8 +637,8 @@ sudo systemctl status nginx
 #### 4. Permission Issues
 ```bash
 # Fix file permissions
-sudo chown -R hackathon:hackathon /opt/hackathon-service
-sudo chmod -R 755 /opt/hackathon-service
+sudo chown -R hackathon:hackathon /opt/exportco
+sudo chmod -R 755 /opt/exportco
 ```
 
 ---
@@ -647,10 +647,10 @@ sudo chmod -R 755 /opt/hackathon-service
 
 ```bash
 # Check service status
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 
 # View real-time logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 
 # Check system resources
 htop
@@ -679,16 +679,16 @@ Your Hackathon Service is now deployed and running at:
 
 ```bash
 # Check service status
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 
 # View logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 
 # Restart service
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 
 # Update from GitHub
-cd /opt/hackathon-service && ./update.sh
+cd /opt/exportco && ./update.sh
 
 # Check system resources
 htop

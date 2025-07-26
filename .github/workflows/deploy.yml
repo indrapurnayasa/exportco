@@ -19,5 +19,5 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /opt/hackathon-service
+            cd /opt/exportco
             ./deploy.sh 

@@ -21,7 +21,7 @@ This guide shows you how to deploy your Hackathon Service directly from GitHub t
 ### 1.1 Push your code to GitHub
 ```bash
 # On your local machine
-cd /Users/66371/Documents/BNI/Hackathon\ BI/hackathon-service
+cd /Users/66371/Documents/BNI/Hackathon\ BI/exportco
 
 # Initialize git if not already done
 git init
@@ -29,7 +29,7 @@ git add .
 git commit -m "Initial commit"
 
 # Add your GitHub repository as remote
-git remote add origin https://github.com/YOUR_USERNAME/hackathon-service.git
+git remote add origin https://github.com/YOUR_USERNAME/exportco.git
 git branch -M main
 git push -u origin main
 ```
@@ -119,7 +119,7 @@ ssh root@101.50.2.59
 
 # Update the repository name in the script
 nano ~/deploy-from-github.sh
-# Change: GITHUB_REPO="your-github-username/hackathon-service"
+# Change: GITHUB_REPO="indrapurnayasa/exportco"
 
 # Run the deployment
 ./deploy-from-github.sh
@@ -128,13 +128,13 @@ nano ~/deploy-from-github.sh
 ### 3.2 Verify Deployment
 ```bash
 # Check service status
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 
 # Test the API
 curl http://101.50.2.59/api/v1/
 
 # Check logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 ```
 
 ## 🔄 Step 4: Update Your Application
@@ -142,7 +142,7 @@ sudo journalctl -u hackathon-service -f
 ### 4.1 Make Changes Locally
 ```bash
 # On your local machine
-cd /Users/66371/Documents/BNI/Hackathon\ BI/hackathon-service
+cd /Users/66371/Documents/BNI/Hackathon\ BI/exportco
 
 # Make your changes
 # ... edit files ...
@@ -186,12 +186,12 @@ jobs:
         username: root
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
-          cd /opt/hackathon-service
+          cd /opt/exportco
           git pull origin main
           source venv/bin/activate
           pip install -r requirements.txt
           alembic upgrade head
-          sudo systemctl restart hackathon-service
+          sudo systemctl restart exportco
 ```
 
 ### 5.2 Webhook Deployment
@@ -222,20 +222,20 @@ sudo systemctl start webhook
 ### 6.1 Check Deployment Status
 ```bash
 # Service status
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 
 # Recent logs
-sudo journalctl -u hackathon-service -n 50
+sudo journalctl -u exportco -n 50
 
 # Git status
-cd /opt/hackathon-service
+cd /opt/exportco
 git status
 git log --oneline -5
 ```
 
 ### 6.2 Rollback to Previous Version
 ```bash
-cd /opt/hackathon-service
+cd /opt/exportco
 
 # List recent commits
 git log --oneline -10
@@ -245,16 +245,16 @@ git reset --hard <commit-hash>
 source venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 ```
 
 ### 6.3 Environment Variables
 ```bash
 # Edit environment variables
-sudo nano /opt/hackathon-service/.env
+sudo nano /opt/exportco/.env
 
 # Restart service after changes
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 ```
 
 ## 🔧 Troubleshooting
@@ -273,27 +273,27 @@ ssh -T git@github.com
 #### 2. Repository Not Found
 ```bash
 # Check repository URL
-cd /opt/hackathon-service
+cd /opt/exportco
 git remote -v
 
 # Update remote URL
-git remote set-url origin https://github.com/YOUR_USERNAME/hackathon-service.git
+git remote set-url origin https://github.com/YOUR_USERNAME/exportco.git
 ```
 
 #### 3. Permission Denied
 ```bash
 # Fix file permissions
-sudo chown -R $USER:$USER /opt/hackathon-service
-sudo chmod -R 755 /opt/hackathon-service
+sudo chown -R $USER:$USER /opt/exportco
+sudo chmod -R 755 /opt/exportco
 ```
 
 #### 4. Service Won't Start
 ```bash
 # Check logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 
 # Check dependencies
-cd /opt/hackathon-service
+cd /opt/exportco
 source venv/bin/activate
 pip list
 ```
@@ -303,7 +303,7 @@ pip list
 ### Git Operations
 ```bash
 # Check repository status
-cd /opt/hackathon-service
+cd /opt/exportco
 git status
 git log --oneline -5
 
@@ -317,19 +317,19 @@ git diff HEAD~1
 ### Service Management
 ```bash
 # Restart service
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 
 # View real-time logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 
 # Check service configuration
-sudo systemctl cat hackathon-service
+sudo systemctl cat exportco
 ```
 
 ### Database Operations
 ```bash
 # Run migrations
-cd /opt/hackathon-service
+cd /opt/exportco
 source venv/bin/activate
 alembic upgrade head
 
@@ -372,21 +372,21 @@ nano ~/deploy-from-github.sh
 ./update-repo.sh
 
 # Or manually
-cd /opt/hackathon-service
+cd /opt/exportco
 git pull origin main
 source venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 ```
 
 ### Monitoring
 ```bash
 # Check service status
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 
 # View logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 
 # Test API
 curl http://101.50.2.59/api/v1/

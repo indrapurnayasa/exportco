@@ -16,7 +16,7 @@ A FastAPI-based service for hackathon management with user authentication, proje
 ## Project Structure
 
 ```
-hackathon-service/
+exportco/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py              # FastAPI app instance, middlewares, routers
@@ -62,7 +62,7 @@ hackathon-service/
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd hackathon-service
+cd exportco
 ```
 
 2. Create a virtual environment:

@@ -34,10 +34,10 @@ git config --global user.email "your-email@example.com"
 git config --global credential.helper store
 
 # Test the connection by cloning a repository
-git clone https://github.com/YOUR_USERNAME/hackathon-service.git /tmp/test-clone
+git clone https://github.com/YOUR_USERNAME/exportco.git /tmp/test-clone
 
 # When prompted:
-# Username: your-github-username
+# Username: indrapurnayasa
 # Password: your-personal-access-token (not your GitHub password!)
 
 # If successful, remove test clone
@@ -64,8 +64,8 @@ curl -H "Authorization: token YOUR_TOKEN" https://api.github.com/user
 
 ### If you try to use regular password:
 ```bash
-git clone https://github.com/YOUR_USERNAME/hackathon-service.git
-# Username: your-github-username
+git clone https://github.com/YOUR_USERNAME/exportco.git
+# Username: indrapurnayasa
 # Password: your-github-password  # This will FAIL!
 ```
 
@@ -168,7 +168,7 @@ ssh -T git@github.com
 curl -H "Authorization: token YOUR_TOKEN" https://api.github.com/user
 
 # Test repository access
-git clone https://github.com/YOUR_USERNAME/hackathon-service.git /tmp/test
+git clone https://github.com/YOUR_USERNAME/exportco.git /tmp/test
 rm -rf /tmp/test
 ```
 
@@ -178,7 +178,7 @@ rm -rf /tmp/test
 ssh -T git@github.com
 
 # Test repository access
-git clone git@github.com:YOUR_USERNAME/hackathon-service.git /tmp/test
+git clone git@github.com:YOUR_USERNAME/exportco.git /tmp/test
 rm -rf /tmp/test
 ```
 
@@ -237,12 +237,12 @@ After connecting to GitHub:
 
 1. **Clone your repository**:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/hackathon-service.git /opt/hackathon-service
+   git clone https://github.com/YOUR_USERNAME/exportco.git /opt/exportco
    ```
 
 2. **Deploy your application**:
    ```bash
-   cd /opt/hackathon-service
+   cd /opt/exportco
    ./deploy-github.sh
    ```
 

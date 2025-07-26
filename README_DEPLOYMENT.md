@@ -44,27 +44,27 @@ You have several options:
 **Option A: Using SCP**
 ```bash
 # From your local machine
-scp -r /path/to/your/hackathon-service hackathon@101.50.2.59:/home/hackathon/
+scp -r /path/to/your/exportco hackathon@101.50.2.59:/home/hackathon/
 ```
 
 **Option B: Using Git (if your code is in a repository)**
 ```bash
 # On the VPS
 cd /home/hackathon
-git clone https://github.com/your-username/hackathon-service.git
+git clone https://github.com/indrapurnayasa/exportco.git
 ```
 
 **Option C: Using rsync**
 ```bash
 # From your local machine
-rsync -avz --exclude='venv' --exclude='__pycache__' /path/to/your/hackathon-service/ hackathon@101.50.2.59:/home/hackathon/hackathon-service/
+rsync -avz --exclude='venv' --exclude='__pycache__' /path/to/your/exportco/ hackathon@101.50.2.59:/home/hackathon/exportco/
 ```
 
 ## Step 3: Run the Setup Script
 
 ### 3.1 Make scripts executable and run setup
 ```bash
-cd /home/hackathon/hackathon-service
+cd /home/hackathon/exportco
 chmod +x setup.sh
 chmod +x deploy.sh
 
@@ -99,7 +99,7 @@ This script will:
 
 ### 5.1 Check service status
 ```bash
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 ```
 
 ### 5.2 Check if the application is accessible
@@ -114,7 +114,7 @@ curl http://101.50.2.59/docs
 ### 5.3 Check logs
 ```bash
 # View application logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 
 # View Nginx logs
 sudo tail -f /var/log/nginx/access.log
@@ -125,7 +125,7 @@ sudo tail -f /var/log/nginx/error.log
 
 ### 6.1 Update the .env file
 ```bash
-sudo nano /opt/hackathon-service/.env
+sudo nano /opt/exportco/.env
 ```
 
 Make sure to update these important variables:
@@ -142,7 +142,7 @@ DATABASE_URL=postgresql://maverick:maverick1946@localhost:5432/hackathondb
 
 ### 6.2 Restart the service after changes
 ```bash
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 ```
 
 ## Step 7: Set Up SSL Certificate (Recommended)
@@ -163,7 +163,7 @@ sudo certbot --nginx -d your-domain.com
 ### 8.1 Check service health
 ```bash
 # Check if service is running
-sudo systemctl is-active hackathon-service
+sudo systemctl is-active exportco
 
 # Check resource usage
 htop
@@ -178,7 +178,7 @@ free -h
 ### 8.2 View monitoring logs
 ```bash
 # View monitoring script logs
-tail -f /var/log/hackathon-service/monitor.log
+tail -f /var/log/exportco/monitor.log
 
 # View backup logs
 tail -f /var/log/cron
@@ -197,10 +197,10 @@ tail -f /var/log/cron
 #### 1. Service won't start
 ```bash
 # Check service status
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 
 # View detailed logs
-sudo journalctl -u hackathon-service -n 50
+sudo journalctl -u exportco -n 50
 
 # Check if port is in use
 sudo netstat -tlnp | grep :8000
@@ -233,8 +233,8 @@ sudo systemctl status nginx
 #### 4. Permission issues
 ```bash
 # Fix file permissions
-sudo chown -R hackathon:hackathon /opt/hackathon-service
-sudo chmod -R 755 /opt/hackathon-service
+sudo chown -R hackathon:hackathon /opt/exportco
+sudo chmod -R 755 /opt/exportco
 ```
 
 ## Useful Commands
@@ -242,31 +242,31 @@ sudo chmod -R 755 /opt/hackathon-service
 ### Service Management
 ```bash
 # Start service
-sudo systemctl start hackathon-service
+sudo systemctl start exportco
 
 # Stop service
-sudo systemctl stop hackathon-service
+sudo systemctl stop exportco
 
 # Restart service
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 
 # Enable auto-start
-sudo systemctl enable hackathon-service
+sudo systemctl enable exportco
 
 # Disable auto-start
-sudo systemctl disable hackathon-service
+sudo systemctl disable exportco
 ```
 
 ### Log Management
 ```bash
 # View real-time logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 
 # View last 100 lines
-sudo journalctl -u hackathon-service -n 100
+sudo journalctl -u exportco -n 100
 
 # View logs since yesterday
-sudo journalctl -u hackathon-service --since yesterday
+sudo journalctl -u exportco --since yesterday
 ```
 
 ### Database Management
@@ -275,7 +275,7 @@ sudo journalctl -u hackathon-service --since yesterday
 sudo -u postgres psql -d hackathondb
 
 # Run migrations
-cd /opt/hackathon-service
+cd /opt/exportco
 source venv/bin/activate
 alembic upgrade head
 
@@ -302,7 +302,7 @@ alembic revision --autogenerate -m "Description of changes"
 ## Backup and Recovery
 
 ### Automatic Backups
-- Location: `/var/backups/hackathon-service/`
+- Location: `/var/backups/exportco/`
 - Frequency: Daily at 2 AM
 - Retention: 7 days
 - Includes: Application files and database dump
@@ -315,18 +315,18 @@ alembic revision --autogenerate -m "Description of changes"
 ### Restore from Backup
 ```bash
 # Restore application files
-cd /opt/hackathon-service
-tar -xzf /var/backups/hackathon-service/app_backup_YYYYMMDD_HHMMSS.tar.gz
+cd /opt/exportco
+tar -xzf /var/backups/exportco/app_backup_YYYYMMDD_HHMMSS.tar.gz
 
 # Restore database
-sudo -u postgres psql hackathondb < /var/backups/hackathon-service/db_backup_YYYYMMDD_HHMMSS.sql.gz
+sudo -u postgres psql hackathondb < /var/backups/exportco/db_backup_YYYYMMDD_HHMMSS.sql.gz
 ```
 
 ## Support
 
 If you encounter issues:
 
-1. Check the logs: `sudo journalctl -u hackathon-service -f`
+1. Check the logs: `sudo journalctl -u exportco -f`
 2. Verify configuration: Check the `.env` file and service configuration
 3. Test connectivity: Use `curl` to test API endpoints
 4. Check system resources: Use `htop` and `df -h`

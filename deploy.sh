@@ -30,14 +30,14 @@ sudo apt install -y \
 
 # Create application directory
 echo "📁 Setting up application directory..."
-sudo mkdir -p /opt/hackathon-service
-sudo chown $USER:$USER /opt/hackathon-service
-cd /opt/hackathon-service
+sudo mkdir -p /opt/exportco
+sudo chown $USER:$USER /opt/exportco
+cd /opt/exportco
 
 # Clone or copy your application
 echo "📋 Copying application files..."
 # If you have the files locally, you can copy them here
-# cp -r /path/to/your/hackathon-service/* /opt/hackathon-service/
+# cp -r /path/to/your/exportco/* /opt/exportco/
 
 # Create virtual environment
 echo "🐍 Setting up Python virtual environment..."
@@ -120,7 +120,7 @@ alembic upgrade head
 
 # Create systemd service file
 echo "🔧 Creating systemd service..."
-sudo tee /etc/systemd/system/hackathon-service.service > /dev/null << EOF
+sudo tee /etc/systemd/system/exportco.service > /dev/null << EOF
 [Unit]
 Description=Hackathon Service API
 After=network.target postgresql.service
@@ -129,9 +129,9 @@ After=network.target postgresql.service
 Type=exec
 User=$USER
 Group=$USER
-WorkingDirectory=/opt/hackathon-service
-Environment=PATH=/opt/hackathon-service/venv/bin
-ExecStart=/opt/hackathon-service/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+WorkingDirectory=/opt/exportco
+Environment=PATH=/opt/exportco/venv/bin
+ExecStart=/opt/exportco/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10
 
@@ -142,12 +142,12 @@ EOF
 # Enable and start the service
 echo "🚀 Starting the service..."
 sudo systemctl daemon-reload
-sudo systemctl enable hackathon-service
-sudo systemctl start hackathon-service
+sudo systemctl enable exportco
+sudo systemctl start exportco
 
 # Set up Nginx as reverse proxy
 echo "🌐 Setting up Nginx reverse proxy..."
-sudo tee /etc/nginx/sites-available/hackathon-service > /dev/null << EOF
+sudo tee /etc/nginx/sites-available/exportco > /dev/null << EOF
 server {
     listen 80;
     server_name 101.50.2.59;
@@ -183,7 +183,7 @@ server {
 EOF
 
 # Enable the site and restart Nginx
-sudo ln -sf /etc/nginx/sites-available/hackathon-service /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/exportco /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo systemctl restart nginx
 
@@ -197,7 +197,7 @@ sudo ufw --force enable
 # Check service status
 echo "📊 Checking service status..."
 sleep 5
-sudo systemctl status hackathon-service --no-pager
+sudo systemctl status exportco --no-pager
 
 echo "✅ Deployment completed successfully!"
 echo ""
@@ -207,10 +207,10 @@ echo "   - API Docs: http://101.50.2.59/docs"
 echo "   - ReDoc: http://101.50.2.59/redoc"
 echo ""
 echo "📋 Useful commands:"
-echo "   - Check service status: sudo systemctl status hackathon-service"
-echo "   - View logs: sudo journalctl -u hackathon-service -f"
-echo "   - Restart service: sudo systemctl restart hackathon-service"
-echo "   - Stop service: sudo systemctl stop hackathon-service"
+echo "   - Check service status: sudo systemctl status exportco"
+echo "   - View logs: sudo journalctl -u exportco -f"
+echo "   - Restart service: sudo systemctl restart exportco"
+echo "   - Stop service: sudo systemctl stop exportco"
 echo ""
 echo "🔧 Next steps:"
 echo "   1. Update the .env file with your actual OpenAI API key"

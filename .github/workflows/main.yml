@@ -39,7 +39,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/hackathon-service:latest
+          tags: ${{ secrets.DOCKER_USERNAME }}/exportco:latest
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@master
@@ -48,7 +48,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /opt/hackathon-service
+            cd /opt/exportco
             
             # Create or update .env file
             cat > .env << 'EOL'
@@ -70,7 +70,7 @@ jobs:
             EOL
             
             # Pull latest image
-            docker pull ${{ secrets.DOCKER_USERNAME }}/hackathon-service:latest
+            docker pull ${{ secrets.DOCKER_USERNAME }}/exportco:latest
             
             # Stop existing container
             docker-compose down

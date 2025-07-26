@@ -30,13 +30,13 @@ chmod +x setup.sh deploy-github.sh github-setup.sh
 
 ```bash
 # On your local machine
-cd /Users/66371/Documents/BNI/Hackathon\ BI/hackathon-service
+cd /Users/66371/Documents/BNI/Hackathon\ BI/exportco
 
 # Initialize and push to GitHub
 git init
 git add .
 git commit -m "Initial commit"
-git remote add origin https://github.com/YOUR_USERNAME/hackathon-service.git
+git remote add origin https://github.com/YOUR_USERNAME/exportco.git
 git branch -M main
 git push -u origin main
 ```
@@ -71,7 +71,7 @@ su - hackathon
 ```bash
 # Update repository name in script
 nano deploy-github.sh
-# Change: GITHUB_REPO="your-github-username/hackathon-service"
+# Change: GITHUB_REPO="indrapurnayasa/exportco"
 
 # Run deployment
 ./deploy-github.sh
@@ -81,13 +81,13 @@ nano deploy-github.sh
 
 ```bash
 # Check service status
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 
 # Test the API
 curl http://101.50.2.59/api/v1/
 
 # View logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 ```
 
 ## 🎯 Your Service is Live!
@@ -105,7 +105,7 @@ git commit -m "Update"
 git push origin main
 
 # On VPS, update the application
-cd /opt/hackathon-service
+cd /opt/exportco
 ./update.sh
 ```
 
@@ -113,13 +113,13 @@ cd /opt/hackathon-service
 
 ```bash
 # Check service status
-sudo systemctl status hackathon-service
+sudo systemctl status exportco
 
 # View logs
-sudo journalctl -u hackathon-service -f
+sudo journalctl -u exportco -f
 
 # Restart service
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 
 # Check if port is in use
 sudo netstat -tlnp | grep :8000

@@ -57,12 +57,12 @@ case $auth_method in
         # Create a script to update the repository
         cat > ~/update-repo.sh << EOF
 #!/bin/bash
-cd /opt/hackathon-service
+cd /opt/exportco
 git pull origin main
 source venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 echo "Repository updated successfully!"
 EOF
         chmod +x ~/update-repo.sh
@@ -108,12 +108,12 @@ EOF
         # Create a script to update the repository
         cat > ~/update-repo.sh << 'EOF'
 #!/bin/bash
-cd /opt/hackathon-service
+cd /opt/exportco
 git pull origin main
 source venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 echo "Repository updated successfully!"
 EOF
         chmod +x ~/update-repo.sh
@@ -148,12 +148,12 @@ EOF
         # Create a script to update the repository
         cat > ~/update-repo.sh << 'EOF'
 #!/bin/bash
-cd /opt/hackathon-service
+cd /opt/exportco
 git pull origin main
 source venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
-sudo systemctl restart hackathon-service
+sudo systemctl restart exportco
 echo "Repository updated successfully!"
 EOF
         chmod +x ~/update-repo.sh
@@ -186,15 +186,15 @@ cat > ~/deploy-from-github.sh << 'EOF'
 #!/bin/bash
 
 # GitHub deployment script
-GITHUB_REPO="your-github-username/hackathon-service"
+GITHUB_REPO="indrapurnayasa/exportco"
 GITHUB_BRANCH="main"
 
 echo "🚀 Deploying from GitHub..."
 
 # Create application directory
-sudo mkdir -p /opt/hackathon-service
-sudo chown $USER:$USER /opt/hackathon-service
-cd /opt/hackathon-service
+sudo mkdir -p /opt/exportco
+sudo chown $USER:$USER /opt/exportco
+cd /opt/exportco
 
 # Clone or pull repository
 if [ -d ".git" ]; then
@@ -276,7 +276,7 @@ fi
 alembic upgrade head
 
 # Create systemd service
-sudo tee /etc/systemd/system/hackathon-service.service > /dev/null << EOL
+sudo tee /etc/systemd/system/exportco.service > /dev/null << EOL
 [Unit]
 Description=Hackathon Service API
 After=network.target postgresql.service
@@ -285,9 +285,9 @@ After=network.target postgresql.service
 Type=exec
 User=$USER
 Group=$USER
-WorkingDirectory=/opt/hackathon-service
-Environment=PATH=/opt/hackathon-service/venv/bin
-ExecStart=/opt/hackathon-service/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+WorkingDirectory=/opt/exportco
+Environment=PATH=/opt/exportco/venv/bin
+ExecStart=/opt/exportco/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10
 
@@ -297,8 +297,8 @@ EOL
 
 # Start service
 sudo systemctl daemon-reload
-sudo systemctl enable hackathon-service
-sudo systemctl restart hackathon-service
+sudo systemctl enable exportco
+sudo systemctl restart exportco
 
 echo "✅ Deployment completed!"
 echo "🌐 Your service is available at: http://101.50.2.59"
