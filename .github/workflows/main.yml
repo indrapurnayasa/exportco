@@ -1,0 +1,88 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          pip install pytest
+          pytest
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/hackathon-service:latest
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: 101.50.2.59
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/hackathon-service
+            
+            # Create or update .env file
+            cat > .env << 'EOL'
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            ALGORITHM=HS256
+            ACCESS_TOKEN_EXPIRE_MINUTES=30
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            DB_POOL_SIZE=20
+            DB_MAX_OVERFLOW=30
+            DB_POOL_TIMEOUT=30
+            DB_POOL_RECYCLE=3600
+            RATE_LIMIT_REQUESTS=100
+            RATE_LIMIT_WINDOW=1
+            CACHE_TTL=300
+            CACHE_MAX_SIZE=1000
+            MAX_QUERY_LIMIT=10000
+            QUERY_TIMEOUT=30
+            LOG_LEVEL=INFO
+            EOL
+            
+            # Pull latest image
+            docker pull ${{ secrets.DOCKER_USERNAME }}/hackathon-service:latest
+            
+            # Stop existing container
+            docker-compose down
+            
+            # Start new container
+            docker-compose up -d
+            
+            # Clean up old images
+            docker image prune -f
+            
+            # Check container status
+            docker ps
+            
+            # Show logs
+            docker-compose logs --tail=100 

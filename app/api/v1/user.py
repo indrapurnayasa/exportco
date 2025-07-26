@@ -4,8 +4,12 @@ from typing import List
 from app.db.database import get_db
 from app.services.user_service import UserService
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
+import redis
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+# Initialize Redis client (global, outside endpoint)
+redis_client = redis.Redis.from_url("redis://default:7HB9zBV8ZcStEv3S3uXIAzjncTlcxmtR@redis-14884.c292.ap-southeast-1-1.ec2.redns.redis-cloud.com:14884")
 
 @router.get("/", response_model=List[UserResponse])
 async def get_users(
@@ -15,7 +19,8 @@ async def get_users(
 ):
     """Get all users with pagination"""
     user_service = UserService(db)
-    return user_service.get_users(skip=skip, limit=limit)
+    result = user_service.get_users(skip=skip, limit=limit)
+    return result
 
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(

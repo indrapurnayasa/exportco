@@ -11,8 +11,12 @@ from app.schemas.komoditi import (
     KomoditiResponse, 
     KomoditiFilter
 )
+import redis
 
 router = APIRouter(prefix="/komoditi", tags=["komoditi"])
+
+# Initialize Redis client (global, outside endpoint)
+redis_client = redis.Redis.from_url("redis://default:7HB9zBV8ZcStEv3S3uXIAzjncTlcxmtR@redis-14884.c292.ap-southeast-1-1.ec2.redns.redis-cloud.com:14884")
 
 @router.get("/", response_model=List[KomoditiResponse])
 async def get_komoditi(
@@ -22,7 +26,8 @@ async def get_komoditi(
 ):
     """Get all commodities with pagination"""
     komoditi_service = KomoditiService(db)
-    return komoditi_service.get_all(skip=skip, limit=limit)
+    result = komoditi_service.get_all(skip=skip, limit=limit)
+    return result
 
 @router.get("/{komoditi_id}", response_model=KomoditiResponse)
 async def get_komoditi_by_id(
@@ -45,6 +50,11 @@ async def get_komoditi_by_kode(
     db: Session = Depends(get_db)
 ):
     """Get commodity by code"""
+    cache_key = f"komoditi:kode:{kode_komoditi}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        import json
+        return json.loads(cached)
     komoditi_service = KomoditiService(db)
     komoditi = komoditi_service.get_by_kode(kode_komoditi)
     if not komoditi:
@@ -52,6 +62,8 @@ async def get_komoditi_by_kode(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Commodity not found"
         )
+    import json
+    redis_client.set(cache_key, json.dumps(komoditi, default=str), ex=1800)
     return komoditi
 
 @router.post("/", response_model=KomoditiResponse, status_code=status.HTTP_201_CREATED)
@@ -114,7 +126,8 @@ async def filter_komoditi(
         max_harga=max_harga
     )
     komoditi_service = KomoditiService(db)
-    return komoditi_service.filter_data(filters, skip=skip, limit=limit)
+    result = komoditi_service.filter_data(filters, skip=skip, limit=limit)
+    return result
 
 # Search endpoints
 @router.get("/search/{search_term}", response_model=List[KomoditiResponse])
@@ -125,8 +138,16 @@ async def search_komoditi(
     db: Session = Depends(get_db)
 ):
     """Search commodities by name or code (partial match)"""
+    cache_key = f"komoditi:search:{search_term}:{skip}:{limit}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        import json
+        return json.loads(cached)
     komoditi_service = KomoditiService(db)
-    return komoditi_service.search_komoditi(search_term, skip=skip, limit=limit)
+    result = komoditi_service.search_komoditi(search_term, skip=skip, limit=limit)
+    import json
+    redis_client.set(cache_key, json.dumps(result, default=str), ex=1800)
+    return result
 
 @router.get("/by-nama/{nama_komoditi}", response_model=List[KomoditiResponse])
 async def get_by_nama(
@@ -166,5 +187,13 @@ async def get_by_harga_range(
 @router.get("/statistics/")
 async def get_statistics(db: Session = Depends(get_db)):
     """Get basic statistics about commodities"""
+    cache_key = "komoditi:statistics"
+    cached = redis_client.get(cache_key)
+    if cached:
+        import json
+        return json.loads(cached)
     komoditi_service = KomoditiService(db)
-    return komoditi_service.get_statistics() 
+    result = komoditi_service.get_statistics()
+    import json
+    redis_client.set(cache_key, json.dumps(result, default=str), ex=1800)
+    return result 

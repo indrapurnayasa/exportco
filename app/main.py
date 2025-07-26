@@ -16,7 +16,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://service-exportin.vercel.app",
-                   "https://exportin.vercel.app"],
+                   "https://exportin.vercel.app", "http://localhost:3000"],
     # allow_origins=settings.ALLOWED_HOSTS,
     allow_credentials=True,
     allow_methods=["*"],

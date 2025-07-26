@@ -10,8 +10,12 @@ from app.schemas.export_data import (
     ExportDataResponse, 
     ExportDataFilter
 )
+import redis
 
 router = APIRouter(prefix="/export-data", tags=["export-data"])
+
+# Initialize Redis client (global, outside endpoint)
+redis_client = redis.Redis.from_url("redis://default:7HB9zBV8ZcStEv3S3uXIAzjncTlcxmtR@redis-14884.c292.ap-southeast-1-1.ec2.redns.redis-cloud.com:14884")
 
 @router.get("/", response_model=List[ExportDataResponse])
 async def get_export_data(
@@ -21,7 +25,8 @@ async def get_export_data(
 ):
     """Get all export data with pagination"""
     export_service = ExportDataService(db)
-    return export_service.get_all(skip=skip, limit=limit)
+    result = export_service.get_all(skip=skip, limit=limit)
+    return result
 
 @router.get("/{export_id}", response_model=ExportDataResponse)
 async def get_export_data_by_id(
@@ -110,7 +115,8 @@ async def filter_export_data(
         max_netweight=max_netweight
     )
     export_service = ExportDataService(db)
-    return export_service.filter_data(filters, skip=skip, limit=limit)
+    result = export_service.filter_data(filters, skip=skip, limit=limit)
+    return result
 
 @router.get("/search/kodehs/{kodehs_search}", response_model=List[ExportDataResponse])
 async def search_by_kodehs(
@@ -127,5 +133,13 @@ async def search_by_kodehs(
 @router.get("/statistics/")
 async def get_statistics(db: Session = Depends(get_db)):
     """Get basic statistics about export data"""
+    cache_key = "export_data:statistics"
+    cached = redis_client.get(cache_key)
+    if cached:
+        import json
+        return json.loads(cached)
     export_service = ExportDataService(db)
-    return export_service.get_statistics() 
+    result = export_service.get_statistics()
+    import json
+    redis_client.set(cache_key, json.dumps(result, default=str), ex=1800)
+    return result 

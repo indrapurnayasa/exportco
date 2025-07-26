@@ -25,12 +25,20 @@ import asyncio
 from functools import lru_cache
 import time
 import traceback
+import redis
+import random
 
 router = APIRouter(prefix="/prompt-library", tags=["prompt-library"])
 
 # Cache untuk embedding dan prompt
 _embedding_cache = {}
 _prompt_cache = {}
+
+# Initialize Redis client (global, outside endpoint)
+redis_client = redis.Redis.from_url("redis://default:7HB9zBV8ZcStEv3S3uXIAzjncTlcxmtR@redis-14884.c292.ap-southeast-1-1.ec2.redns.redis-cloud.com:14884")
+
+# Use the new Redis configuration for logging
+log_redis = redis.Redis.from_url("redis://default:ENRwPubGW1VmpdNmr5kSJG7jqW7IdyKG@redis-16098.crce185.ap-seast-1-1.ec2.redns.redis-cloud.com:16098")
 
 @router.get("/", response_model=List[PromptLibraryResponse])
 async def get_prompts(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_async_db)):
@@ -229,13 +237,23 @@ def extract_data_manually(text: str) -> dict:
 @router.post("/chatbot/")
 async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db)):
     """
-    Optimized chatbot endpoint with minimal delay
+    Optimized chatbot endpoint with minimal delay and Redis caching
     """
     try:
+        cache_key = f"chatbot:{payload.query}"
+        cached = redis_client.get(cache_key)
+        if cached:
+            import json
+            response = json.loads(cached)
+            # Log the response to Redis log DB
+            log_key = f"chatbotlog:{int(time.time())}:{random.randint(1000,9999)}"
+            log_redis.set(log_key, json.dumps(response), ex=1800)
+            return response
+
         # Use optimized chatbot service
         optimized_service = OptimizedChatbotService(db)
         result = await optimized_service.process_chatbot_query(payload.query)
-        
+
         # Add prompt logging if available
         if "prompt_id" in result and result.get("cot_analysis"):
             try:
@@ -248,9 +266,15 @@ async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db
                 )
             except Exception as e:
                 print(f"[OPTIMIZED] Error logging prompt usage: {e}")
-        
+
+        # Cache the result (as JSON string, set expiration to 1 hour)
+        import json
+        redis_client.set(cache_key, json.dumps(result), ex=3600)
+        # Log the response to Redis log DB
+        log_key = f"chatbotlog:{int(time.time())}:{random.randint(1000,9999)}"
+        log_redis.set(log_key, json.dumps(result), ex=1800)
         return result
-        
+
     except Exception as e:
         print(f"[OPTIMIZED] Error in chatbot endpoint: {e}")
         traceback.print_exc()
