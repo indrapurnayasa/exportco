@@ -1,13 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy import text
+from sqlalchemy import select, func, and_, or_, text
 from typing import Dict, Any, Optional, List
 from app.models.komoditi import Komoditi
 from app.models.currency_rates import CurrencyRates
 from app.models.export_duty_chunks import ExportDutyChunk
 import numpy as np
 import asyncio
-from functools import lru_cache
 import time
 import os
 

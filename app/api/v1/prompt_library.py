@@ -11,22 +11,18 @@ from app.schemas.prompt_library import (
 import openai
 import os
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from app.models.prompt_library import PromptLibrary
-from sqlalchemy import cast
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import text
 import numpy as np
 from app.services.export_duty_service import ExportDutyService
 from app.services.export_document_service import ExportDocumentService
 import json
 import re
 import asyncio
-from functools import lru_cache
 import time
 import traceback
 import redis
-import random
 
 router = APIRouter(prefix="/prompt-library", tags=["prompt-library"])
 

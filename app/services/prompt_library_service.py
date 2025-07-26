@@ -1,14 +1,12 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, cast, update
+from sqlalchemy import select, func, cast, update, text
 from sqlalchemy.orm import selectinload
 from pgvector.sqlalchemy import Vector
 from typing import List, Optional, Tuple
 from app.models.prompt_library import PromptLibrary
 from app.schemas.prompt_library import PromptLibraryCreate, PromptLibraryUpdate
 import numpy as np
-from sqlalchemy import text
 import asyncio
-from functools import lru_cache
 import logging
 from datetime import datetime
 
