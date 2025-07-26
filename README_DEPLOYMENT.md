@@ -1,337 +1,184 @@
-# Deployment Guide for Hackathon Service
+# ExportCo Deployment Guide
 
-This guide will help you deploy your Hackathon Service on your VPS with IP `101.50.2.59`.
+Simple deployment guide for ExportCo API using Docker Compose.
 
-## Prerequisites
+## 🚀 **Quick Deployment**
 
-- Access to your VPS via SSH
-- Sudo privileges on the VPS
-- Your application files ready for deployment
+### **Prerequisites**
+- Docker and Docker Compose installed
+- Existing PostgreSQL database (separate container or server)
+- GitHub repository access
 
-## Step 1: Initial VPS Setup
-
-### 1.1 Connect to your VPS
+### **Step 1: Create Deployment Directory**
 ```bash
-ssh root@101.50.2.59
-# or if you have a different user
-ssh your-username@101.50.2.59
+mkdir -p ~/exportco-deploy
+cd ~/exportco-deploy
 ```
 
-### 1.2 Create a deployment user (recommended)
+### **Step 2: Create Environment File**
 ```bash
-# Create a new user for deployment
-sudo adduser hackathon
-sudo usermod -aG sudo hackathon
+cat > .env << 'EOF'
+# Database Configuration (point to your existing PostgreSQL)
+POSTGRES_DB=hackathondb
+POSTGRES_USER=maverick
+POSTGRES_PASSWORD=maverick1946
+POSTGRES_HOST=your-postgres-container-name
+POSTGRES_PORT=5432
+DATABASE_URL=postgresql://maverick:maverick1946@your-postgres-container-name:5432/hackathondb
 
-# Switch to the new user
-su - hackathon
-```
+# API Configuration
+PORT=8000
+SECRET_KEY=your-super-secret-key-change-this-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 
-### 1.3 Set up SSH keys (if not already done)
-```bash
-# On your local machine, generate SSH key if you don't have one
-ssh-keygen -t rsa -b 4096 -C "your-email@example.com"
-
-# Copy your public key to the VPS
-ssh-copy-id hackathon@101.50.2.59
-```
-
-## Step 2: Upload Your Application
-
-### 2.1 Upload files to VPS
-You have several options:
-
-**Option A: Using SCP**
-```bash
-# From your local machine
-scp -r /path/to/your/exportco hackathon@101.50.2.59:/home/hackathon/
-```
-
-**Option B: Using Git (if your code is in a repository)**
-```bash
-# On the VPS
-cd /home/hackathon
-git clone https://github.com/indrapurnayasa/exportco.git
-```
-
-**Option C: Using rsync**
-```bash
-# From your local machine
-rsync -avz --exclude='venv' --exclude='__pycache__' /path/to/your/exportco/ hackathon@101.50.2.59:/home/hackathon/exportco/
-```
-
-## Step 3: Run the Setup Script
-
-### 3.1 Make scripts executable and run setup
-```bash
-cd /home/hackathon/exportco
-chmod +x setup.sh
-chmod +x deploy.sh
-
-# Run the setup script
-./setup.sh
-```
-
-This script will:
-- Update system packages
-- Install required dependencies
-- Configure firewall and security
-- Set up monitoring and backup scripts
-- Create necessary directories
-
-## Step 4: Deploy the Application
-
-### 4.1 Run the deployment script
-```bash
-./deploy.sh
-```
-
-This script will:
-- Install Python dependencies
-- Set up PostgreSQL database
-- Create environment configuration
-- Run database migrations
-- Create systemd service
-- Set up Nginx reverse proxy
-- Start the application
-
-## Step 5: Verify Deployment
-
-### 5.1 Check service status
-```bash
-sudo systemctl status exportco
-```
-
-### 5.2 Check if the application is accessible
-```bash
-# Test the API
-curl http://101.50.2.59/api/v1/
-
-# Test the documentation
-curl http://101.50.2.59/docs
-```
-
-### 5.3 Check logs
-```bash
-# View application logs
-sudo journalctl -u exportco -f
-
-# View Nginx logs
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-```
-
-## Step 6: Configure Environment Variables
-
-### 6.1 Update the .env file
-```bash
-sudo nano /opt/exportco/.env
-```
-
-Make sure to update these important variables:
-```env
-# Update with your actual OpenAI API key
+# OpenAI Configuration
 OPENAI_API_KEY=your-actual-openai-api-key-here
+OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 
-# Update the secret key (should be auto-generated)
-SECRET_KEY=your-generated-secret-key
-
-# Database configuration (should be correct for local PostgreSQL)
-DATABASE_URL=postgresql://maverick:maverick1946@localhost:5432/hackathondb
+# Application Configuration
+PROJECT_NAME=ExportCo API
+VERSION=1.0.0
+DEBUG=false
+LOG_LEVEL=INFO
+EOF
 ```
 
-### 6.2 Restart the service after changes
+### **Step 3: Create Logs and Backups Directories**
 ```bash
-sudo systemctl restart exportco
+mkdir -p logs backups
+chmod 755 logs backups
 ```
 
-## Step 7: Set Up SSL Certificate (Recommended)
-
-### 7.1 Install Certbot
+### **Step 4: Deploy**
 ```bash
-sudo apt install certbot python3-certbot-nginx
+# Build and start the API service
+docker-compose up -d --build
+
+# Check status
+docker ps
+
+# Run database migrations
+docker exec -it exportco_api alembic upgrade head
 ```
 
-### 7.2 Obtain SSL certificate
+### **Step 5: Verify Deployment**
 ```bash
-sudo certbot --nginx -d your-domain.com
-# If you don't have a domain, you can use the IP (not recommended for production)
+# Test API
+curl http://localhost:8000/api/v1/
+
+# Test documentation
+curl http://localhost:8000/docs
+
+# Check logs
+docker logs exportco_api
 ```
 
-## Step 8: Monitoring and Maintenance
+## 🔧 **Configuration**
 
-### 8.1 Check service health
+### **Environment Variables**
+Update your `.env` file with your actual values:
+
+- `POSTGRES_HOST`: Your existing PostgreSQL container name or IP
+- `DATABASE_URL`: Full database connection string
+- `SECRET_KEY`: Generate a secure secret key
+- `OPENAI_API_KEY`: Your actual OpenAI API key
+
+### **Network Configuration**
+If your PostgreSQL is in a different Docker network:
 ```bash
-# Check if service is running
-sudo systemctl is-active exportco
+# Connect to the same network as your PostgreSQL
+docker network connect your-postgres-network exportco_api
+```
+
+## 📊 **Management Commands**
+
+### **Start/Stop**
+```bash
+# Start services
+docker-compose up -d
+
+# Stop services
+docker-compose down
+
+# Restart services
+docker-compose restart
+```
+
+### **Updates**
+```bash
+# Pull latest code and rebuild
+docker-compose up -d --build
+
+# Run migrations after update
+docker exec -it exportco_api alembic upgrade head
+```
+
+### **Monitoring**
+```bash
+# View logs
+docker logs -f exportco_api
+
+# Check health
+docker inspect exportco_api | grep Health -A 10
 
 # Check resource usage
-htop
-
-# Check disk space
-df -h
-
-# Check memory usage
-free -h
+docker stats exportco_api
 ```
 
-### 8.2 View monitoring logs
+## 🆘 **Troubleshooting**
+
+### **Database Connection Issues**
 ```bash
-# View monitoring script logs
-tail -f /var/log/exportco/monitor.log
-
-# View backup logs
-tail -f /var/log/cron
-```
-
-### 8.3 Manual backup
-```bash
-# Run backup manually
-/usr/local/bin/backup-service.sh
-```
-
-## Troubleshooting
-
-### Common Issues and Solutions
-
-#### 1. Service won't start
-```bash
-# Check service status
-sudo systemctl status exportco
-
-# View detailed logs
-sudo journalctl -u exportco -n 50
-
-# Check if port is in use
-sudo netstat -tlnp | grep :8000
-```
-
-#### 2. Database connection issues
-```bash
-# Check PostgreSQL status
-sudo systemctl status postgresql
-
 # Test database connection
-sudo -u postgres psql -d hackathondb -c "SELECT 1;"
-
-# Check database logs
-sudo tail -f /var/log/postgresql/postgresql-*.log
+docker exec -it exportco_api python -c "
+import psycopg2
+try:
+    conn = psycopg2.connect('postgresql://maverick:maverick1946@your-postgres-host:5432/hackathondb')
+    print('✅ Database connection successful')
+    conn.close()
+except Exception as e:
+    print(f'❌ Connection failed: {e}')
+"
 ```
 
-#### 3. Nginx issues
+### **Port Conflicts**
 ```bash
-# Check Nginx configuration
-sudo nginx -t
+# Check what's using port 8000
+sudo netstat -tlnp | grep :8000
 
-# Restart Nginx
-sudo systemctl restart nginx
-
-# Check Nginx status
-sudo systemctl status nginx
+# Change port in .env file
+PORT=8001
 ```
 
-#### 4. Permission issues
+### **Build Issues**
 ```bash
-# Fix file permissions
-sudo chown -R hackathon:hackathon /opt/exportco
-sudo chmod -R 755 /opt/exportco
+# Rebuild without cache
+docker-compose build --no-cache
+
+# Check build logs
+docker-compose logs api
 ```
 
-## Useful Commands
+## 🎯 **Success Checklist**
 
-### Service Management
-```bash
-# Start service
-sudo systemctl start exportco
+- [ ] Environment file configured with correct database settings
+- [ ] Docker Compose deployment successful
+- [ ] Database migrations applied
+- [ ] API responding at http://localhost:8000
+- [ ] Documentation accessible
+- [ ] Health checks passing
+- [ ] Logs monitoring set up
 
-# Stop service
-sudo systemctl stop exportco
+## 📋 **Quick Reference**
 
-# Restart service
-sudo systemctl restart exportco
+**Service URL**: http://localhost:8000  
+**Documentation**: http://localhost:8000/docs  
+**Health Check**: http://localhost:8000/health  
 
-# Enable auto-start
-sudo systemctl enable exportco
+**Container Name**: `exportco_api`  
+**Network**: `exportco-deploy_app-network`
 
-# Disable auto-start
-sudo systemctl disable exportco
-```
+---
 
-### Log Management
-```bash
-# View real-time logs
-sudo journalctl -u exportco -f
-
-# View last 100 lines
-sudo journalctl -u exportco -n 100
-
-# View logs since yesterday
-sudo journalctl -u exportco --since yesterday
-```
-
-### Database Management
-```bash
-# Connect to database
-sudo -u postgres psql -d hackathondb
-
-# Run migrations
-cd /opt/exportco
-source venv/bin/activate
-alembic upgrade head
-
-# Create new migration
-alembic revision --autogenerate -m "Description of changes"
-```
-
-## Security Considerations
-
-1. **Firewall**: UFW is configured to allow only necessary ports (22, 80, 443)
-2. **Fail2ban**: Protects against brute force attacks
-3. **SSH Security**: Root login disabled, password authentication disabled
-4. **Regular Updates**: Keep system packages updated
-5. **Backups**: Automated daily backups with 7-day retention
-6. **Monitoring**: Automated service monitoring with auto-restart
-
-## Performance Optimization
-
-1. **Database**: PostgreSQL is configured with connection pooling
-2. **Caching**: Application-level caching is enabled
-3. **Rate Limiting**: API rate limiting is configured
-4. **Log Rotation**: Logs are automatically rotated to prevent disk space issues
-
-## Backup and Recovery
-
-### Automatic Backups
-- Location: `/var/backups/exportco/`
-- Frequency: Daily at 2 AM
-- Retention: 7 days
-- Includes: Application files and database dump
-
-### Manual Backup
-```bash
-/usr/local/bin/backup-service.sh
-```
-
-### Restore from Backup
-```bash
-# Restore application files
-cd /opt/exportco
-tar -xzf /var/backups/exportco/app_backup_YYYYMMDD_HHMMSS.tar.gz
-
-# Restore database
-sudo -u postgres psql hackathondb < /var/backups/exportco/db_backup_YYYYMMDD_HHMMSS.sql.gz
-```
-
-## Support
-
-If you encounter issues:
-
-1. Check the logs: `sudo journalctl -u exportco -f`
-2. Verify configuration: Check the `.env` file and service configuration
-3. Test connectivity: Use `curl` to test API endpoints
-4. Check system resources: Use `htop` and `df -h`
-
-Your service should now be accessible at:
-- **Main API**: http://101.50.2.59
-- **API Documentation**: http://101.50.2.59/docs
-- **ReDoc Documentation**: http://101.50.2.59/redoc 
+**Your ExportCo API is now deployed and ready! 🚀** 
