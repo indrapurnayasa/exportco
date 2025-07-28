@@ -106,19 +106,47 @@ print_success "Application directory ready"
 
 # Step 8: Set Up Python Environment
 print_status "Step 8: Setting up Python environment..."
-python3.10 -m venv venv
-source venv/bin/activate
 
-# Upgrade pip
-pip install --upgrade pip setuptools wheel
-
-# Install dependencies
-if [ -f "requirements.txt" ]; then
-    pip install -r requirements.txt
-    print_success "Python dependencies installed"
+# Check if conda is available
+if command -v conda &> /dev/null; then
+    print_status "Using conda environment..."
+    
+    # Create conda environment if it doesn't exist
+    if ! conda env list | grep -q "hackathon-env"; then
+        print_status "Creating conda environment: hackathon-env"
+        conda create -n hackathon-env python=3.10 -y
+    fi
+    
+    # Activate conda environment
+    source $(conda info --base)/etc/profile.d/conda.sh
+    conda activate hackathon-env
+    
+    # Install dependencies
+    if [ -f "requirements.txt" ]; then
+        pip install -r requirements.txt
+        print_success "Python dependencies installed in conda environment"
+    else
+        print_error "requirements.txt not found"
+        exit 1
+    fi
 else
-    print_error "requirements.txt not found"
-    exit 1
+    print_status "Conda not found, using virtual environment..."
+    
+    # Create virtual environment
+    python3.10 -m venv venv
+    source venv/bin/activate
+    
+    # Upgrade pip
+    pip install --upgrade pip setuptools wheel
+    
+    # Install dependencies
+    if [ -f "requirements.txt" ]; then
+        pip install -r requirements.txt
+        print_success "Python dependencies installed"
+    else
+        print_error "requirements.txt not found"
+        exit 1
+    fi
 fi
 
 # Step 9: Configure Environment

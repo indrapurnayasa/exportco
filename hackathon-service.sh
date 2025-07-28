@@ -97,17 +97,31 @@ start_service() {
     # Create log directory
     mkdir -p "$LOG_DIR"
     
-    # Check if virtual environment exists
-    if [ ! -d "venv" ] && [ ! -d ".venv" ]; then
-        print_warning "Virtual environment not found. Creating one..."
-        python3 -m venv venv
-    fi
-    
-    # Activate virtual environment
-    if [ -d "venv" ]; then
-        source venv/bin/activate
-    elif [ -d ".venv" ]; then
-        source .venv/bin/activate
+    # Check and activate conda environment
+    if command -v conda &> /dev/null; then
+        # Check if conda environment exists
+        if conda env list | grep -q "hackathon-env"; then
+            print_status "Activating conda environment: hackathon-env"
+            source $(conda info --base)/etc/profile.d/conda.sh
+            conda activate hackathon-env
+        else
+            print_warning "Conda environment 'hackathon-env' not found"
+            print_status "Please create the environment: conda create -n hackathon-env python=3.10"
+            exit 1
+        fi
+    else
+        # Fallback to virtual environment if conda not available
+        if [ ! -d "venv" ] && [ ! -d ".venv" ]; then
+            print_warning "Virtual environment not found. Creating one..."
+            python3 -m venv venv
+        fi
+        
+        # Activate virtual environment
+        if [ -d "venv" ]; then
+            source venv/bin/activate
+        elif [ -d ".venv" ]; then
+            source .venv/bin/activate
+        fi
     fi
     
     # Install dependencies if requirements.txt exists

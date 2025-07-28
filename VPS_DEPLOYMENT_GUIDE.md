@@ -76,6 +76,23 @@ git clone <your-repository-url> .
 ```
 
 ### 2.3 Set Up Python Environment
+
+**Option 1: Using Conda (Recommended)**
+```bash
+# Install Miniconda if not already installed
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh -b
+source ~/.bashrc
+
+# Create conda environment
+conda create -n hackathon-env python=3.10 -y
+conda activate hackathon-env
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+**Option 2: Using Virtual Environment**
 ```bash
 # Create virtual environment
 python3.10 -m venv venv

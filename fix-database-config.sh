@@ -115,14 +115,24 @@ fi
 
 # Step 5: Test Alembic connection
 print_status "Step 5: Testing Alembic connection..."
-if source venv/bin/activate 2>/dev/null; then
+if command -v conda &> /dev/null && conda env list | grep -q "hackathon-env"; then
+    # Use conda environment
+    source $(conda info --base)/etc/profile.d/conda.sh
+    conda activate hackathon-env
+    if alembic current >/dev/null 2>&1; then
+        print_success "Alembic connection successful"
+    else
+        print_warning "Alembic connection failed, but this might be normal for a fresh database"
+    fi
+elif source venv/bin/activate 2>/dev/null; then
+    # Fallback to virtual environment
     if alembic current >/dev/null 2>&1; then
         print_success "Alembic connection successful"
     else
         print_warning "Alembic connection failed, but this might be normal for a fresh database"
     fi
 else
-    print_warning "Virtual environment not found, skipping Alembic test"
+    print_warning "No Python environment found, skipping Alembic test"
 fi
 
 print_success "Database configuration fix completed!"
