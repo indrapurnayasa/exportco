@@ -152,7 +152,6 @@ start_service() {
         --workers "$WORKERS" \
         --log-level info \
         --access-log \
-        --log-config /dev/null \
         > "$LOG_DIR/uvicorn.log" 2>&1 &
     
     local pid=$!
