@@ -4,6 +4,8 @@ from app.core.config import settings
 from app.api.v1 import user, auth, export_data, komoditi, export
 from app.api.v1.prompt_library import router as prompt_library_router
 from app.db.database import create_tables
+from app.utils.logger import log_server_startup, log_server_shutdown, log_database_connection, log_configuration_validation
+from app.middleware.logging_middleware import LoggingMiddleware
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -23,6 +25,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add logging middleware
+app.add_middleware(LoggingMiddleware)
+
 # Include API routers
 app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(user.router, prefix=settings.API_V1_STR)
@@ -37,14 +42,18 @@ async def startup_event():
     # Validate configuration
     try:
         settings.validate()
-        print("✅ Configuration validated successfully")
+        log_configuration_validation(True)
     except ValueError as e:
-        print(f"❌ Configuration validation failed: {e}")
+        log_configuration_validation(False, [str(e)])
         raise
     
     # Create database tables
-    create_tables()
-    print("✅ Database tables initialized")
+    try:
+        create_tables()
+        log_database_connection(True)
+    except Exception as e:
+        log_database_connection(False, str(e))
+        raise
 
 @app.get("/")
 async def root():

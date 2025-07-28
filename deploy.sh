@@ -1,219 +1,140 @@
 #!/bin/bash
 
-# Hackathon Service Deployment Script
-# For VPS IP: 101.50.2.59
+# Hackathon Service Deployment Script for VPS
+# This script sets up the service on a VPS
 
-set -e  # Exit on any error
+set -e
 
-echo "🚀 Starting deployment of Hackathon Service on VPS..."
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+print_status() {
+    echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} ✅ $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} ⚠️  $1"
+}
+
+print_error() {
+    echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} ❌ $1"
+}
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    print_error "Please run as root (use sudo)"
+    exit 1
+fi
+
+print_status "Starting Hackathon Service deployment..."
 
 # Update system packages
-echo "📦 Updating system packages..."
-sudo apt update && sudo apt upgrade -y
+print_status "Updating system packages..."
+apt update && apt upgrade -y
 
-# Install required system dependencies
-echo "🔧 Installing system dependencies..."
-sudo apt install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
-    postgresql \
-    postgresql-contrib \
-    nginx \
-    git \
-    curl \
-    wget \
-    unzip \
-    build-essential \
-    libpq-dev \
-    python3-dev
+# Install required packages
+print_status "Installing required packages..."
+apt install -y python3 python3-pip python3-venv nginx curl wget git
 
 # Create application directory
-echo "📁 Setting up application directory..."
-sudo mkdir -p /opt/exportco
-sudo chown $USER:$USER /opt/exportco
-cd /opt/exportco
+APP_DIR="/root/hackathon-service"
+print_status "Setting up application directory: $APP_DIR"
+mkdir -p "$APP_DIR"
+cd "$APP_DIR"
 
-# Clone or copy your application
-echo "📋 Copying application files..."
-# If you have the files locally, you can copy them here
-# cp -r /path/to/your/exportco/* /opt/exportco/
+# Copy service files (assuming this script is run from the project directory)
+print_status "Copying service files..."
+cp -r . "$APP_DIR/"
 
-# Create virtual environment
-echo "🐍 Setting up Python virtual environment..."
+# Set up Python virtual environment
+print_status "Setting up Python virtual environment..."
 python3 -m venv venv
 source venv/bin/activate
 
 # Install Python dependencies
-echo "📚 Installing Python dependencies..."
+print_status "Installing Python dependencies..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Set up PostgreSQL
-echo "🗄️ Setting up PostgreSQL database..."
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
+# Create logs directory
+mkdir -p logs
 
-# Create database and user
-sudo -u postgres psql << EOF
-CREATE DATABASE hackathondb;
-CREATE USER maverick WITH PASSWORD 'maverick1946';
-GRANT ALL PRIVILEGES ON DATABASE hackathondb TO maverick;
-ALTER USER maverick CREATEDB;
-\q
-EOF
+# Set up systemd service
+print_status "Setting up systemd service..."
+cp hackathon-service.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable hackathon-service
 
-# Create .env file
-echo "⚙️ Creating environment configuration..."
-cat > .env << EOF
-# API Configuration
-PROJECT_NAME=Hackathon Service API
-VERSION=1.0.0
-DESCRIPTION=A FastAPI service for hackathon management
-API_V1_STR=/api/v1
+# Configure firewall (if ufw is available)
+if command -v ufw &> /dev/null; then
+    print_status "Configuring firewall..."
+    ufw allow 8000/tcp
+    ufw allow 80/tcp
+    ufw allow 443/tcp
+    ufw --force enable
+fi
 
-# Server Configuration
-HOST=0.0.0.0
-PORT=8000
-DEBUG=false
-
-# CORS Configuration
-ALLOWED_HOSTS=["*"]
-
-# OpenAI API Configuration
-OPENAI_API_KEY=your-openai-api-key-here
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
-
-# PostgreSQL Database Configuration
-POSTGRES_DB=hackathondb
-POSTGRES_USER=maverick
-POSTGRES_PASSWORD=maverick1946
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-DATABASE_URL=postgresql://maverick:maverick1946@localhost:5432/hackathondb
-
-# Security Configuration
-SECRET_KEY=$(openssl rand -hex 32)
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-ALGORITHM=HS256
-
-# Logging Configuration
-LOG_LEVEL=INFO
-
-# Production settings
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=30
-DB_POOL_TIMEOUT=30
-DB_POOL_RECYCLE=3600
-RATE_LIMIT_REQUESTS=100
-RATE_LIMIT_WINDOW=1
-CACHE_TTL=300
-CACHE_MAX_SIZE=1000
-MAX_QUERY_LIMIT=10000
-QUERY_TIMEOUT=30
-EOF
-
-# Run database migrations
-echo "🔄 Running database migrations..."
-source venv/bin/activate
-alembic upgrade head
-
-# Create systemd service file
-echo "🔧 Creating systemd service..."
-sudo tee /etc/systemd/system/exportco.service > /dev/null << EOF
-[Unit]
-Description=Hackathon Service API
-After=network.target postgresql.service
-
-[Service]
-Type=exec
-User=$USER
-Group=$USER
-WorkingDirectory=/opt/exportco
-Environment=PATH=/opt/exportco/venv/bin
-ExecStart=/opt/exportco/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Enable and start the service
-echo "🚀 Starting the service..."
-sudo systemctl daemon-reload
-sudo systemctl enable exportco
-sudo systemctl start exportco
-
-# Set up Nginx as reverse proxy
-echo "🌐 Setting up Nginx reverse proxy..."
-sudo tee /etc/nginx/sites-available/exportco > /dev/null << EOF
+# Set up Nginx reverse proxy (optional)
+print_status "Setting up Nginx reverse proxy..."
+cat > /etc/nginx/sites-available/hackathon-service << 'EOF'
 server {
     listen 80;
-    server_name 101.50.2.59;
+    server_name _;
 
     location / {
         proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
     }
-
-    # API documentation
-    location /docs {
-        proxy_pass http://127.0.0.1:8000/docs;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-
-    location /redoc {
-        proxy_pass http://127.0.0.1:8000/redoc;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
 }
 EOF
 
-# Enable the site and restart Nginx
-sudo ln -sf /etc/nginx/sites-available/exportco /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo systemctl restart nginx
+ln -sf /etc/nginx/sites-available/hackathon-service /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+systemctl restart nginx
 
-# Set up firewall
-echo "🔥 Configuring firewall..."
-sudo ufw allow 22/tcp
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw --force enable
+# Make service script executable
+chmod +x hackathon-service.sh
 
-# Check service status
-echo "📊 Checking service status..."
+# Start the service
+print_status "Starting the service..."
+systemctl start hackathon-service
+
+# Wait a moment and check status
 sleep 5
-sudo systemctl status exportco --no-pager
+if systemctl is-active --quiet hackathon-service; then
+    print_success "Service started successfully!"
+    print_success "Service status: $(systemctl is-active hackathon-service)"
+    print_success "API available at: http://$(curl -s ifconfig.me):8000"
+    print_success "Health check: http://$(curl -s ifconfig.me):8000/health"
+    print_success "API docs: http://$(curl -s ifconfig.me):8000/docs"
+    print_success "Logs: journalctl -u hackathon-service -f"
+else
+    print_error "Service failed to start"
+    systemctl status hackathon-service
+    exit 1
+fi
 
-echo "✅ Deployment completed successfully!"
-echo ""
-echo "🌐 Your service is now available at:"
-echo "   - Main API: http://101.50.2.59"
-echo "   - API Docs: http://101.50.2.59/docs"
-echo "   - ReDoc: http://101.50.2.59/redoc"
-echo ""
-echo "📋 Useful commands:"
-echo "   - Check service status: sudo systemctl status exportco"
-echo "   - View logs: sudo journalctl -u exportco -f"
-echo "   - Restart service: sudo systemctl restart exportco"
-echo "   - Stop service: sudo systemctl stop exportco"
-echo ""
-echo "🔧 Next steps:"
-echo "   1. Update the .env file with your actual OpenAI API key"
-echo "   2. Configure SSL certificate for HTTPS (recommended)"
-echo "   3. Set up monitoring and logging"
-echo "   4. Configure backup strategy" 
+print_success "Deployment completed successfully!"
+print_status "Useful commands:"
+echo "  systemctl start hackathon-service"
+echo "  systemctl stop hackathon-service"
+echo "  systemctl restart hackathon-service"
+echo "  systemctl status hackathon-service"
+echo "  journalctl -u hackathon-service -f"
+echo "  ./hackathon-service.sh start"
+echo "  ./hackathon-service.sh stop"
+echo "  ./hackathon-service.sh restart" 
