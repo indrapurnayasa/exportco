@@ -113,6 +113,15 @@ start_service() {
     # Install dependencies if requirements.txt exists
     if [ -f "requirements.txt" ]; then
         print_status "Installing/updating dependencies..."
+        
+        # Check Python version and fix distutils issue if needed
+        python_version=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+        if [[ "$python_version" == "3.12"* ]] || [[ "$python_version" == "3.13"* ]]; then
+            print_warning "Detected Python $python_version, applying distutils fix..."
+            pip install --upgrade pip setuptools>=68.0.0 wheel>=0.40.0
+        fi
+        
+        # Install requirements
         pip install -r requirements.txt
     fi
     

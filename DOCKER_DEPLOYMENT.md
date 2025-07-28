@@ -247,7 +247,7 @@ sudo systemctl restart docker
 docker-compose logs postgres
 
 # Test database connection
-docker-compose exec api python -c "import psycopg2; psycopg2.connect('postgresql://maverick:maverick1946@postgres:5432/hackathondb')"
+docker-compose exec api python -c "import psycopg2; psycopg2.connect('postgresql://maverick:Hackathon2025@postgres:5432/hackathondb')"
 ```
 
 ### **Permission Issues**

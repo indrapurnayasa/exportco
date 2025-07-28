@@ -62,6 +62,14 @@ source venv/bin/activate
 # Install Python dependencies
 print_status "Installing Python dependencies..."
 pip install --upgrade pip
+
+# Fix distutils issue for Python 3.12+
+python_version=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+if [[ "$python_version" == "3.12"* ]] || [[ "$python_version" == "3.13"* ]]; then
+    print_warning "Detected Python $python_version, applying distutils fix..."
+    pip install setuptools>=68.0.0 wheel>=0.40.0
+fi
+
 pip install -r requirements.txt
 
 # Create logs directory
