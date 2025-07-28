@@ -57,42 +57,12 @@ chmod +x hackathon-service.sh
 
 ### **Step 3: HTTPS Setup**
 ```bash
-# Install nginx and certbot
-sudo apt install -y nginx certbot python3-certbot-nginx
+# Setup Direct HTTPS (No Nginx Required)
+chmod +x setup-https-direct.sh
+./setup-https-direct.sh
 
-# Create nginx configuration
-sudo tee /etc/nginx/sites-available/hackathon-service > /dev/null << 'EOF'
-server {
-    listen 80;
-    server_name your-domain.com www.your-domain.com;
-    
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-}
-EOF
-
-# Enable site
-sudo ln -sf /etc/nginx/sites-available/hackathon-service /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl start nginx
-sudo systemctl enable nginx
-
-# Get SSL certificate
-sudo certbot --nginx -d your-domain.com --non-interactive --agree-tos --email admin@your-domain.com
+# Start HTTPS service
+./start-https.sh
 ```
 
 ### **Step 4: Start Service**
@@ -100,14 +70,50 @@ sudo certbot --nginx -d your-domain.com --non-interactive --agree-tos --email ad
 # Start the service
 ./hackathon-service.sh start
 
-# Test HTTPS endpoints
-curl https://your-domain.com/health
-curl https://your-domain.com/docs
+# Test HTTPS endpoints (replace YOUR_SERVER_IP with your actual IP)
+curl -k https://YOUR_SERVER_IP:8443/health
+curl -k https://YOUR_SERVER_IP:8443/docs
 ```
 
 ## 🔧 **Detailed Setup**
 
-### **Option A: Production HTTPS (Recommended)**
+### **Option A: Direct HTTPS (No Nginx Required) - RECOMMENDED**
+
+This option runs HTTPS directly with FastAPI/Uvicorn without requiring nginx. Perfect for your use case!
+
+#### **1. Setup Direct HTTPS**
+```bash
+# Setup HTTPS directly with FastAPI
+chmod +x setup-https-direct.sh
+./setup-https-direct.sh
+```
+
+#### **2. Start HTTPS Service**
+```bash
+# Start the HTTPS service
+./start-https.sh
+
+# Check status
+./status-https.sh
+
+# Stop service
+./stop-https.sh
+```
+
+#### **3. Access Your HTTPS API**
+```bash
+# Test endpoints (replace YOUR_SERVER_IP with your actual IP)
+curl -k https://YOUR_SERVER_IP:8443/health
+curl -k https://YOUR_SERVER_IP:8443/docs
+curl -k https://YOUR_SERVER_IP:8443/api/v1/users
+```
+
+#### **4. Your HTTPS Endpoints**
+- **Health Check**: `https://YOUR_SERVER_IP:8443/health`
+- **API Docs**: `https://YOUR_SERVER_IP:8443/docs`
+- **Main API**: `https://YOUR_SERVER_IP:8443/`
+
+### **Option B: Production HTTPS (Nginx + Let's Encrypt)**
 
 #### **1. Domain Setup**
 ```bash
@@ -157,17 +163,17 @@ curl -k https://localhost:8443/health
 
 ## 🌐 **Access Your API**
 
-### **Production HTTPS (With Domain)**
+### **Production HTTPS (Direct FastAPI)**
 ```bash
-# Health Check
-curl https://your-domain.com/health
+# Health Check (replace YOUR_SERVER_IP with your actual IP)
+curl -k https://YOUR_SERVER_IP:8443/health
 
 # API Documentation
-curl https://your-domain.com/docs
+curl -k https://YOUR_SERVER_IP:8443/docs
 
 # Test endpoints
-curl https://your-domain.com/api/v1/users
-curl https://your-domain.com/api/v1/komoditi
+curl -k https://YOUR_SERVER_IP:8443/api/v1/users
+curl -k https://YOUR_SERVER_IP:8443/api/v1/komoditi
 ```
 
 ### **Development HTTPS (Self-Signed)**
@@ -188,19 +194,15 @@ curl -k https://localhost:8443/api/v1/users
 ```bash
 # Allow necessary ports
 sudo ufw allow ssh
-sudo ufw allow 80
-sudo ufw allow 443
+sudo ufw allow 8443
 sudo ufw allow 8000
 sudo ufw --force enable
 ```
 
 ### **SSL Certificate Renewal**
 ```bash
-# Automatic renewal (Let's Encrypt)
-sudo certbot renew --dry-run
-
 # Manual renewal (self-signed)
-./setup-https-dev.sh
+./setup-https-direct.sh
 ```
 
 ## 📊 **Monitoring & Maintenance**
@@ -314,7 +316,8 @@ sudo journalctl -u postgresql
 ```
 
 ### **HTTPS URLs**
-- **Production**: `https://your-domain.com/health`
+- **Production (IP)**: `https://YOUR_SERVER_IP/health` (use -k flag)
+- **Production (Domain)**: `https://your-domain.com/health`
 - **Development**: `https://localhost:8443/health`
 
 ### **Testing Commands**
@@ -322,7 +325,10 @@ sudo journalctl -u postgresql
 # Test HTTP
 curl http://localhost:8000/health
 
-# Test HTTPS (production)
+# Test HTTPS (production - IP)
+curl -k https://YOUR_SERVER_IP/health
+
+# Test HTTPS (production - domain)
 curl https://your-domain.com/health
 
 # Test HTTPS (development)

@@ -157,84 +157,24 @@ print_status "Step 8: Setting up scripts..."
 chmod +x hackathon-service.sh
 print_success "Scripts made executable"
 
-# Step 9: Install Nginx and Certbot
-print_status "Step 9: Installing nginx and certbot..."
-sudo apt install -y nginx certbot python3-certbot-nginx
-print_success "Nginx and certbot installed"
+# Step 9: Setup HTTPS Direct with FastAPI
+print_status "Step 9: Setting up HTTPS directly with FastAPI..."
 
-# Step 10: Configure Nginx
-print_status "Step 10: Configuring nginx..."
-
-# Create nginx configuration
-sudo tee /etc/nginx/sites-available/hackathon-service > /dev/null << EOF
-server {
-    listen 80;
-    server_name $DOMAIN_NAME;
-    
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-    
-    location /health {
-        proxy_pass http://127.0.0.1:8000/health;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-    
-    location /docs {
-        proxy_pass http://127.0.0.1:8000/docs;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-EOF
-
-# Enable site
-sudo ln -sf /etc/nginx/sites-available/hackathon-service /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-
-# Test nginx configuration
-sudo nginx -t
-print_success "Nginx configuration created"
-
-# Step 11: Start Nginx
-print_status "Step 11: Starting nginx..."
-sudo systemctl start nginx
-sudo systemctl enable nginx
-print_success "Nginx started"
-
-# Step 12: Get SSL Certificate
-print_status "Step 12: Getting SSL certificate..."
-sudo certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos --email admin@$DOMAIN_NAME
-print_success "SSL certificate obtained"
-
-# Step 13: Configure Firewall
-print_status "Step 13: Configuring firewall..."
+# Setup HTTPS directly
+chmod +x setup-https-direct.sh
+./setup-https-direct.sh
+print_success "HTTPS setup completed"
+# Step 10: Configure Firewall
+print_status "Step 10: Configuring firewall..."
 sudo apt install -y ufw
 sudo ufw allow ssh
-sudo ufw allow 'Nginx Full'
+sudo ufw allow 8443
 sudo ufw allow 8000
 sudo ufw --force enable
 print_success "Firewall configured"
 
-# Step 14: Test Service
-print_status "Step 14: Testing service..."
+# Step 11: Test Service
+print_status "Step 11: Testing service..."
 ./hackathon-service.sh start
 sleep 5
 
@@ -247,8 +187,8 @@ else
     exit 1
 fi
 
-# Step 15: Create Backup Script
-print_status "Step 15: Creating backup script..."
+# Step 12: Create Backup Script
+print_status "Step 12: Creating backup script..."
 tee backup.sh > /dev/null << 'EOF'
 #!/bin/bash
 BACKUP_DIR="/opt/hackathon-service/backups"
@@ -267,17 +207,14 @@ EOF
 chmod +x backup.sh
 print_success "Backup script created"
 
-# Step 16: Setup Automatic Certificate Renewal
-print_status "Step 16: Setting up automatic certificate renewal..."
-(crontab -l 2>/dev/null; echo "0 12 * * * /usr/bin/certbot renew --quiet") | crontab -
-print_success "Automatic certificate renewal configured"
+
 
 print_success "VPS deployment with HTTPS completed successfully!"
 echo ""
 echo "=== YOUR HTTPS ENDPOINTS ==="
-echo "Health Check: https://$DOMAIN_NAME/health"
-echo "API Docs: https://$DOMAIN_NAME/docs"
-echo "Main API: https://$DOMAIN_NAME/"
+echo "Health Check: https://$DOMAIN_NAME:8443/health"
+echo "API Docs: https://$DOMAIN_NAME:8443/docs"
+echo "Main API: https://$DOMAIN_NAME:8443/"
 echo ""
 echo "=== SERVICE COMMANDS ==="
 echo "Start:   ./hackathon-service.sh start"
@@ -287,8 +224,8 @@ echo "Status:  ./hackathon-service.sh status"
 echo "Logs:    ./hackathon-service.sh logs"
 echo ""
 echo "=== TESTING COMMANDS ==="
-echo "Test HTTPS: curl https://$DOMAIN_NAME/health"
-echo "Test API:   curl https://$DOMAIN_NAME/api/v1/users"
+echo "Test HTTPS: curl -k https://$DOMAIN_NAME:8443/health"
+echo "Test API:   curl -k https://$DOMAIN_NAME:8443/api/v1/users"
 echo ""
 echo "=== SECURITY REMINDERS ==="
 echo "1. Change default passwords"
