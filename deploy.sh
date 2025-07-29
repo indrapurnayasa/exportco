@@ -221,10 +221,36 @@ fi
 # STEP 6: FastAPI service deployment
 log "🚀 STEP 6: FastAPI service deployment"
 
-# Start FastAPI service
+# Start FastAPI service directly (don't use start-production-ssl.sh as it kills ports)
 log "🚀 Starting FastAPI service..."
-./start-production-ssl.sh
-check_status "FastAPI service started"
+
+# Check if conda is available and activate environment
+if command -v conda &> /dev/null; then
+    log "🐍 Activating conda environment..."
+    source $(conda info --base)/etc/profile.d/conda.sh
+    conda activate hackathon-env
+else
+    log "🐍 Conda not found, using system Python..."
+fi
+
+# Create logs directory if it doesn't exist
+mkdir -p logs
+
+# Start FastAPI service (HTTP only, Nginx handles HTTPS)
+log "🚀 Starting FastAPI service on port 8000..."
+nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4 > logs/uvicorn-ssl.log 2>&1 &
+
+# Wait for service to start
+sleep 5
+
+# Check if service is running
+if pgrep -f "uvicorn.*app.main:app" > /dev/null; then
+    log "✅ FastAPI service started successfully"
+else
+    log "❌ Failed to start FastAPI service"
+    log "📋 Check logs: tail -f logs/uvicorn-ssl.log"
+    exit 1
+fi
 
 # Wait for services to stabilize
 log "⏳ Waiting for services to stabilize..."
