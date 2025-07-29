@@ -4,8 +4,8 @@ echo "=========================================="
 echo "📊 PRODUCTION SERVICE STATUS"
 echo "=========================================="
 
-# Get domain from environment or use default
-DOMAIN=${DOMAIN:-"yourdomain.com"}
+# Get domain from environment or use dev-ngurah.fun
+DOMAIN=${DOMAIN:-"dev-ngurah.fun"}
 
 # Check FastAPI service
 if pgrep -f "uvicorn.*app.main:app" > /dev/null; then

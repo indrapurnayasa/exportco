@@ -14,7 +14,7 @@ This guide shows you how to deploy your FastAPI service on Vercel with automatic
 
 ### **1. Start Service for Vercel**
 ```bash
-./start-vercel.sh
+
 ```
 
 ### **2. Test Locally**
