@@ -17,7 +17,7 @@ This CI/CD pipeline automatically deploys your FastAPI application to your VPS w
 
 ```bash
 # On your local machine, generate SSH key
-ssh-keygen -t rsa -b 4096 -C "your-email@example.com"
+ssh-keygen -t rsa -b 4096 -C "indrapurnayasaa@gmail.com"
 
 # Copy public key to VPS
 ssh-copy-id username@your-vps-ip
