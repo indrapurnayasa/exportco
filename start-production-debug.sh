@@ -31,7 +31,7 @@ print_error() {
 # Configuration
 HOST="0.0.0.0"
 HTTP_PORT="8000"
-HTTPS_PORT="8432"
+HTTPS_PORT="8443"  # Back to original port
 WORKERS="4"
 LOG_DIR="logs"
 PID_FILE_HTTP="logs/uvicorn-http.pid"
@@ -153,7 +153,7 @@ fi
 # Check port usage
 print_status "Step 9: Checking port usage..."
 PORT_8000=$(sudo lsof -i :8000 2>/dev/null || echo "No process found")
-PORT_8432=$(sudo lsof -i :8432 2>/dev/null || echo "No process found")
+PORT_8443=$(sudo lsof -i :8443 2>/dev/null || echo "No process found")
 
 if echo "$PORT_8000" | grep -q "LISTEN"; then
     print_success "Port 8000 is listening"
@@ -161,10 +161,10 @@ else
     print_error "Port 8000 is not listening"
 fi
 
-if echo "$PORT_8432" | grep -q "LISTEN"; then
-    print_success "Port 8432 is listening"
+if echo "$PORT_8443" | grep -q "LISTEN"; then
+    print_success "Port 8443 is listening"
 else
-    print_error "Port 8432 is not listening"
+    print_error "Port 8443 is not listening"
 fi
 
 # Step 10: Test endpoints
@@ -182,7 +182,7 @@ else
 fi
 
 # Test HTTPS endpoint
-HTTPS_RESPONSE=$(curl -s -k -w "%{http_code}" https://127.0.0.1:8432/health 2>/dev/null || echo "000")
+HTTPS_RESPONSE=$(curl -s -k -w "%{http_code}" https://127.0.0.1:8443/health 2>/dev/null || echo "000")
 HTTPS_STATUS=$(echo "$HTTPS_RESPONSE" | tail -c 4)
 HTTPS_BODY=$(echo "$HTTPS_RESPONSE" | head -c -4)
 
