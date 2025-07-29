@@ -7,6 +7,9 @@ echo "=========================================="
 echo "🚀 STARTING PRODUCTION SERVICE WITH SSL"
 echo "=========================================="
 
+# Get domain from environment or use default
+DOMAIN=${DOMAIN:-"yourdomain.com"}
+
 # Stop existing services
 pkill -f "uvicorn.*app.main:app" 2>/dev/null || true
 
@@ -33,12 +36,15 @@ sleep 5
 if pgrep -f "uvicorn.*app.main:app" > /dev/null; then
     echo "✅ FastAPI service started successfully"
     echo "🌐 Your API is now available at:"
-    echo "   http://localhost:8000/api/v1/export/seasonal-trend"
-    echo "   http://localhost:8000/docs"
-    echo "   http://localhost:8000/health"
+    echo "   https://$DOMAIN/api/v1/export/seasonal-trend"
+    echo "   https://$DOMAIN/docs"
+    echo "   https://$DOMAIN/health"
     echo ""
     echo "📝 Logs are available at: logs/uvicorn-ssl.log"
     echo "🔍 To monitor logs: tail -f logs/uvicorn-ssl.log"
+    echo ""
+    echo "🔧 To stop the service: ./stop-production-ssl.sh"
+    echo "📊 To check status: ./status-production-ssl.sh"
 else
     echo "❌ Failed to start FastAPI service"
     echo "Check logs: tail -f logs/uvicorn-ssl.log"
