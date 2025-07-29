@@ -1,21 +1,15 @@
 #!/bin/bash
 
-# Production Service with SSL
-# This script starts the FastAPI service behind Nginx
-
 echo "=========================================="
-echo "🚀 STARTING PRODUCTION SERVICE WITH SSL"
+echo "🚀 STARTING SERVICE FOR VERCEL DEPLOYMENT"
 echo "=========================================="
-
-# Get domain from environment or use default
-DOMAIN=${DOMAIN:-"yourdomain.com"}
 
 # Kill any processes using our ports first
 echo "🛑 Clearing ports before startup..."
 ./kill-ports.sh
 
 echo ""
-echo "🚀 Starting production service..."
+echo "🚀 Starting service for Vercel..."
 
 # Check if conda is available and activate environment
 if command -v conda &> /dev/null; then
@@ -29,9 +23,9 @@ fi
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
-# Start FastAPI service (HTTP only, Nginx handles HTTPS)
+# Start FastAPI service optimized for Vercel
 echo "Starting FastAPI service on port 8000..."
-nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4 > logs/uvicorn-ssl.log 2>&1 &
+nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 > logs/uvicorn-vercel.log 2>&1 &
 
 # Wait for service to start
 sleep 5
@@ -40,17 +34,22 @@ sleep 5
 if pgrep -f "uvicorn.*app.main:app" > /dev/null; then
     echo "✅ FastAPI service started successfully"
     echo "🌐 Your API is now available at:"
-    echo "   https://$DOMAIN/api/v1/export/seasonal-trend"
-    echo "   https://$DOMAIN/docs"
-    echo "   https://$DOMAIN/health"
+    echo "   http://localhost:8000/api/v1/export/seasonal-trend"
+    echo "   http://localhost:8000/docs"
+    echo "   http://localhost:8000/health"
     echo ""
-    echo "📝 Logs are available at: logs/uvicorn-ssl.log"
-    echo "🔍 To monitor logs: tail -f logs/uvicorn-ssl.log"
+    echo "📝 Logs are available at: logs/uvicorn-vercel.log"
+    echo "🔍 To monitor logs: tail -f logs/uvicorn-vercel.log"
     echo ""
-    echo "🔧 To stop the service: ./stop-production-ssl.sh"
-    echo "📊 To check status: ./status-production-ssl.sh"
+    echo "🎯 Vercel Configuration:"
+    echo "   - Port: 8000"
+    echo "   - Host: 0.0.0.0"
+    echo "   - Workers: 1 (optimized for Vercel)"
+    echo "   - SSL: Handled by Vercel"
+    echo ""
+    echo "🛑 To stop: ./stop-production-ssl.sh"
 else
     echo "❌ Failed to start FastAPI service"
-    echo "Check logs: tail -f logs/uvicorn-ssl.log"
+    echo "Check logs: tail -f logs/uvicorn-vercel.log"
     exit 1
 fi
