@@ -61,6 +61,31 @@ else
     echo "❌ Port 8000: FREE"
 fi
 
+# Check service health
+echo ""
+echo "🏥 Service Health:"
+if curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/health 2>/dev/null | grep -q "200"; then
+    echo "✅ HTTPS Health Check: OK"
+else
+    echo "❌ HTTPS Health Check: FAILED"
+fi
+
+if curl -s -o /dev/null -w "%{http_code}" http://$DOMAIN 2>/dev/null | grep -q "301"; then
+    echo "✅ HTTP Redirect: OK"
+else
+    echo "❌ HTTP Redirect: FAILED"
+fi
+
+# Check SSL certificate validity
+echo ""
+echo "🔐 SSL Certificate Details:"
+if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    echo "✅ Certificate file exists"
+    openssl x509 -in /etc/letsencrypt/live/$DOMAIN/fullchain.pem -text -noout 2>/dev/null | grep -E "(Subject|Issuer|Not After)" | head -3
+else
+    echo "❌ Certificate file not found"
+fi
+
 echo ""
 echo "🌐 Service URLs:"
 echo "   https://$DOMAIN/api/v1/export/seasonal-trend"
