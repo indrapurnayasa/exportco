@@ -38,10 +38,10 @@ chmod +x setup-production-https.sh
 
 After setup, your service will be available at:
 
-- **Health Check**: `https://your-server-ip:8443/health`
-- **API Docs**: `https://your-server-ip:8443/docs`
-- **Seasonal Trend**: `https://your-server-ip:8443/api/v1/export/seasonal-trend`
-- **Country Demand**: `https://your-server-ip:8443/api/v1/export/country-demand`
+- **Health Check**: `https://your-server-ip:8432/health`
+- **API Docs**: `https://your-server-ip:8432/docs`
+- **Seasonal Trend**: `https://your-server-ip:8432/api/v1/export/seasonal-trend`
+- **Country Demand**: `https://your-server-ip:8432/api/v1/export/country-demand`
 
 ## 🔧 Service Management
 
@@ -148,7 +148,7 @@ rm -rf ssl/
 sudo ufw status
 
 # Allow ports
-sudo ufw allow 8443
+sudo ufw allow 8432  # Updated HTTPS port
 sudo ufw allow 8000
 ```
 

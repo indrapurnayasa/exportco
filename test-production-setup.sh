@@ -98,7 +98,7 @@ fi
 
 # Test 5: Test HTTPS endpoint
 print_status "Test 5: Testing HTTPS endpoint..."
-HTTPS_RESPONSE=$(curl -s -k -w "%{http_code}" https://$SERVER_IP:8443/health 2>/dev/null || echo "000")
+HTTPS_RESPONSE=$(curl -s -k -w "%{http_code}" https://$SERVER_IP:8432/health 2>/dev/null || echo "000")
 HTTPS_STATUS=$(echo "$HTTPS_RESPONSE" | tail -c 4)
 HTTPS_BODY=$(echo "$HTTPS_RESPONSE" | head -c -4)
 
@@ -110,7 +110,7 @@ fi
 
 # Test 6: Test API endpoint
 print_status "Test 6: Testing API endpoint..."
-API_RESPONSE=$(curl -s -k -w "%{http_code}" https://$SERVER_IP:8443/api/v1/export/seasonal-trend 2>/dev/null || echo "000")
+API_RESPONSE=$(curl -s -k -w "%{http_code}" https://$SERVER_IP:8432/api/v1/export/seasonal-trend 2>/dev/null || echo "000")
 API_STATUS=$(echo "$API_RESPONSE" | tail -c 4)
 API_BODY=$(echo "$API_RESPONSE" | head -c -4)
 
@@ -122,9 +122,9 @@ fi
 
 # Test 7: Check firewall
 print_status "Test 7: Checking firewall..."
-FIREWALL_STATUS=$(sudo ufw status 2>/dev/null | grep -E "(8443|8000)" || echo "Ports not found")
+FIREWALL_STATUS=$(sudo ufw status 2>/dev/null | grep -E "(8432|8000)" || echo "Ports not found")
 
-if echo "$FIREWALL_STATUS" | grep -q "8443\|8000"; then
+if echo "$FIREWALL_STATUS" | grep -q "8432\|8000"; then
     print_success "Firewall configured for required ports"
 else
     print_warning "Firewall may not be configured for required ports"
@@ -137,16 +137,16 @@ if [ "$HTTP_RUNNING" = true ] && [ "$HTTPS_RUNNING" = true ] && [ "$HTTP_STATUS"
     print_success "🎉 PRODUCTION SETUP IS WORKING CORRECTLY!"
     echo ""
     echo "=== YOUR PRODUCTION ENDPOINTS ==="
-    echo "Health Check: https://$SERVER_IP:8443/health"
-    echo "API Docs:     https://$SERVER_IP:8443/docs"
-    echo "Seasonal Trend: https://$SERVER_IP:8443/api/v1/export/seasonal-trend"
+    echo "Health Check: https://$SERVER_IP:8432/health"
+    echo "API Docs:     https://$SERVER_IP:8432/docs"
+    echo "Seasonal Trend: https://$SERVER_IP:8432/api/v1/export/seasonal-trend"
     echo ""
     echo "=== FRONTEND CONFIGURATION ==="
     echo "Update your frontend to use:"
-    echo "https://$SERVER_IP:8443/api/v1/export/seasonal-trend"
+    echo "https://$SERVER_IP:8432/api/v1/export/seasonal-trend"
     echo ""
     echo "=== NEXT STEPS ==="
-    echo "1. Accept the SSL certificate by visiting: https://$SERVER_IP:8443/health"
+    echo "1. Accept the SSL certificate by visiting: https://$SERVER_IP:8432/health"
     echo "2. Update your frontend API calls to use HTTPS"
     echo "3. Test your frontend application"
     echo ""
@@ -167,6 +167,6 @@ fi
 
 echo "=== TESTING COMMANDS ==="
 echo "Test HTTP:   curl http://127.0.0.1:8000/health"
-echo "Test HTTPS:  curl -k https://$SERVER_IP:8443/health"
-echo "Test API:    curl -k https://$SERVER_IP:8443/api/v1/export/seasonal-trend"
+echo "Test HTTPS:  curl -k https://$SERVER_IP:8432/health"
+echo "Test API:    curl -k https://$SERVER_IP:8432/api/v1/export/seasonal-trend"
 echo ""

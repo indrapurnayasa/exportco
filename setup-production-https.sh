@@ -81,7 +81,7 @@ print_error() {
 # Configuration
 HOST="0.0.0.0"
 HTTP_PORT="8000"
-HTTPS_PORT="8443"
+HTTPS_PORT="8432"  # Changed to avoid port conflicts
 WORKERS="4"
 LOG_DIR="logs"
 PID_FILE_HTTP="logs/uvicorn-http.pid"
@@ -390,7 +390,7 @@ print_success "Production status script created"
 print_status "Step 5: Configuring firewall..."
 sudo ufw allow ssh
 sudo ufw allow 8000
-sudo ufw allow 8443
+sudo ufw allow 8432  # Updated to new HTTPS port
 sudo ufw --force enable
 print_success "Firewall configured"
 

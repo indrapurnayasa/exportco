@@ -31,7 +31,7 @@ print_error() {
 # Configuration
 HOST="0.0.0.0"
 HTTP_PORT="8000"
-HTTPS_PORT="8443"
+HTTPS_PORT="8432"  # Changed to avoid port conflict
 WORKERS="4"
 LOG_DIR="logs"
 PID_FILE_HTTP="logs/uvicorn-http.pid"
@@ -42,29 +42,16 @@ mkdir -p "$LOG_DIR"
 
 print_status "Starting Hackathon Service in Production Mode..."
 
-# Check and activate conda environment
-if command -v conda &> /dev/null; then
-    if conda env list | grep -q "hackathon-env"; then
-        print_status "Activating conda environment: hackathon-env"
-        source $(conda info --base)/etc/profile.d/conda.sh
-        conda activate hackathon-env
-    else
-        print_warning "Conda environment 'hackathon-env' not found"
-        print_status "Please create the environment: conda create -n hackathon-env python=3.10"
-        exit 1
-    fi
-else
-    # Fallback to virtual environment
-    if [ ! -d "venv" ] && [ ! -d ".venv" ]; then
-        print_warning "Virtual environment not found. Creating one..."
-        python3 -m venv venv
-    fi
-    
-    if [ -d "venv" ]; then
-        source venv/bin/activate
-    elif [ -d ".venv" ]; then
-        source .venv/bin/activate
-    fi
+# Activate conda environment
+print_status "Activating conda environment: hackathon-env"
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate hackathon-env
+
+# Check if conda environment exists
+if ! conda env list | grep -q "hackathon-env"; then
+    print_error "Conda environment 'hackathon-env' not found"
+    print_status "Please create the environment: conda create -n hackathon-env python=3.10"
+    exit 1
 fi
 
 # Check if SSL files exist
@@ -133,6 +120,7 @@ if [ "$HTTP_RUNNING" = true ] && [ "$HTTPS_RUNNING" = true ]; then
     echo "2. Accept the certificate by visiting the health endpoint"
     echo "3. Use -k flag with curl for testing"
     echo "4. Both HTTP and HTTPS are running"
+    echo "5. HTTPS port changed to $HTTPS_PORT to avoid conflicts"
     echo ""
 else
     print_error "Some services failed to start"
