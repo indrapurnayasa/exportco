@@ -22,10 +22,44 @@ check_status() {
     fi
 }
 
+# Function to check port availability
+check_port() {
+    local port=$1
+    local service_name=$2
+    
+    log "🔍 Checking port $port ($service_name)..."
+    if sudo lsof -i :$port >/dev/null 2>&1; then
+        log "⚠️  Port $port is in use by:"
+        sudo lsof -i :$port
+        return 1
+    else
+        log "✅ Port $port is free"
+        return 0
+    fi
+}
+
+# STEP 1: Pre-deployment checks and cleanup
+log "🔍 STEP 1: Pre-deployment checks and cleanup"
+
+# Check all required ports
+log "🔍 Checking port availability..."
+check_port 80 "HTTP"
+check_port 443 "HTTPS"
+check_port 8000 "FastAPI"
+
 # Kill any processes using our ports
 log "🛑 Clearing ports..."
 ./kill-ports.sh
 check_status "Ports cleared"
+
+# Verify ports are now free
+log "🔍 Verifying ports are free after cleanup..."
+check_port 80 "HTTP"
+check_port 443 "HTTPS"
+check_port 8000 "FastAPI"
+
+# STEP 2: Code and environment setup
+log "📥 STEP 2: Code and environment setup"
 
 # Pull latest code
 log "📥 Pulling latest code..."
@@ -43,6 +77,9 @@ log "📦 Installing dependencies..."
 pip install -r requirements.txt
 check_status "Dependencies installed"
 
+# STEP 3: SSL certificate management
+log "🔐 STEP 3: SSL certificate management"
+
 # Check SSL certificate
 log "🔐 Checking SSL certificate..."
 if ! sudo certbot certificates | grep -q "$DOMAIN"; then
@@ -54,6 +91,29 @@ if ! sudo certbot certificates | grep -q "$DOMAIN"; then
 else
     log "✅ SSL certificate exists"
 fi
+
+# Verify SSL certificate files
+log "🔐 Verifying SSL certificate files..."
+CERT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
+
+if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
+    log "❌ SSL certificate files missing"
+    log "🔧 Regenerating SSL certificate..."
+    sudo systemctl stop nginx
+    sudo certbot certonly --standalone -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos --email admin@$DOMAIN
+    sudo systemctl start nginx
+    check_status "SSL certificate regenerated"
+fi
+
+# Fix SSL certificate permissions
+log "🔧 Fixing SSL certificate permissions..."
+sudo chmod 644 "$CERT_PATH" 2>/dev/null || true
+sudo chmod 600 "$KEY_PATH" 2>/dev/null || true
+sudo chown root:root "$CERT_PATH" "$KEY_PATH" 2>/dev/null || true
+
+# STEP 4: Nginx configuration
+log "🌐 STEP 4: Nginx configuration"
 
 # Create/update nginx configuration
 log "🌐 Updating nginx configuration..."
@@ -89,9 +149,13 @@ NGINX_EOF
 sudo rm -f /etc/nginx/sites-enabled/*
 sudo ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
 
-# Test and reload nginx
+# Test nginx configuration
+log "🔧 Testing nginx configuration..."
 sudo nginx -t
 check_status "Nginx configuration test"
+
+# STEP 5: Nginx service management
+log "🌐 STEP 5: Nginx service management"
 
 # Enhanced Nginx service management
 log "🌐 Managing Nginx service..."
@@ -136,25 +200,55 @@ else
     exit 1
 fi
 
+# STEP 6: FastAPI service deployment
+log "🚀 STEP 6: FastAPI service deployment"
+
 # Start FastAPI service
 log "🚀 Starting FastAPI service..."
 ./start-production-ssl.sh
 check_status "FastAPI service started"
 
-# Wait a moment for services to start
-sleep 5
+# Wait for services to stabilize
+log "⏳ Waiting for services to stabilize..."
+sleep 10
+
+# STEP 7: Post-deployment verification
+log "📊 STEP 7: Post-deployment verification"
 
 # Check service status
 log "📊 Checking service status..."
 ./status-production-ssl.sh
 
-# Test the service
-log "🧪 Testing service..."
-if curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/api/v1/export/seasonal-trend | grep -q "200"; then
+# Test HTTP to HTTPS redirect
+log "🧪 Testing HTTP to HTTPS redirect..."
+if curl -s -o /dev/null -w "%{http_code}" "http://$DOMAIN" | grep -q "301\|302"; then
+    log "✅ HTTP to HTTPS redirect working"
+else
+    log "❌ HTTP to HTTPS redirect failed"
+fi
+
+# Test HTTPS connection
+log "🧪 Testing HTTPS connection..."
+if curl -s -o /dev/null -w "%{http_code}" "https://$DOMAIN" | grep -q "200\|301\|302"; then
+    log "✅ HTTPS connection working"
+else
+    log "❌ HTTPS connection failed"
+fi
+
+# Test the API endpoint
+log "🧪 Testing API endpoint..."
+if curl -s -o /dev/null -w "%{http_code}" "https://$DOMAIN/api/v1/export/seasonal-trend" | grep -q "200"; then
     log "✅ API endpoint test passed"
 else
     log "❌ API endpoint test failed"
 fi
 
-log "✅ Deployment completed!"
+# Final port verification
+log "🔍 Final port verification..."
+check_port 80 "HTTP"
+check_port 443 "HTTPS"
+check_port 8000 "FastAPI"
+
+log "✅ Deployment completed successfully!"
 log "🌐 Your API is available at: https://$DOMAIN"
+log "📊 Service status: ./status-production-ssl.sh"
