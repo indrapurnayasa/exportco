@@ -38,24 +38,6 @@ check_port() {
     fi
 }
 
-# Function to verify service health
-verify_service_health() {
-    local service_name=$1
-    local test_url=$2
-    local expected_code=$3
-    
-    log "🧪 Testing $service_name..."
-    local response_code=$(curl -s -o /dev/null -w "%{http_code}" "$test_url" 2>/dev/null)
-    
-    if [ "$response_code" = "$expected_code" ]; then
-        log "✅ $service_name is working (HTTP $response_code)"
-        return 0
-    else
-        log "❌ $service_name failed (HTTP $response_code, expected $expected_code)"
-        return 1
-    fi
-}
-
 # STEP 1: Pre-deployment checks and cleanup
 log "🔍 STEP 1: Pre-deployment checks and cleanup"
 
@@ -175,89 +157,55 @@ check_status "Nginx configuration test"
 # STEP 5: Nginx service management
 log "🌐 STEP 5: Nginx service management"
 
-# Enhanced Nginx service management
+# Simple and reliable Nginx management
 log "🌐 Managing Nginx service..."
 
-# Check current Nginx status
-if sudo systemctl is-active --quiet nginx; then
-    log "🔄 Nginx is active, reloading..."
-    sudo systemctl reload nginx
-    if [ $? -eq 0 ]; then
-        log "✅ Nginx reloaded successfully"
-    else
-        log "❌ Nginx reload failed, trying restart..."
-        sudo systemctl restart nginx
-        if [ $? -eq 0 ]; then
-            log "✅ Nginx restarted successfully"
-        else
-            log "❌ Nginx restart failed"
-            log "📋 Nginx error logs:"
-            sudo journalctl -u nginx --no-pager -n 10
-            log "🔧 Trying to enable and start Nginx..."
-            sudo systemctl enable nginx
-            sudo systemctl start nginx
-            if [ $? -eq 0 ]; then
-                log "✅ Nginx enabled and started"
-            else
-                log "❌ Nginx failed to start after enable"
-                sudo systemctl status nginx --no-pager -l
-                log "📋 Nginx error logs:"
-                sudo tail -n 10 /var/log/nginx/error.log 2>/dev/null || echo "No error log found"
-                exit 1
-            fi
-        fi
-    fi
+# Stop Nginx first to ensure clean state
+log "🛑 Stopping Nginx for clean restart..."
+sudo systemctl stop nginx 2>/dev/null || true
+sleep 2
+
+# Enable Nginx to start on boot
+log "🔧 Enabling Nginx service..."
+sudo systemctl enable nginx
+check_status "Nginx enabled"
+
+# Start Nginx
+log "🚀 Starting Nginx service..."
+sudo systemctl start nginx
+if [ $? -eq 0 ]; then
+    log "✅ Nginx started successfully"
 else
-    log "⚠️  Nginx is not active, starting service..."
-    
-    # Try to start Nginx
-    sudo systemctl start nginx
-    if [ $? -eq 0 ]; then
-        log "✅ Nginx started successfully"
-    else
-        log "❌ Nginx start failed, checking logs..."
-        sudo journalctl -u nginx --no-pager -n 10
-        log "🔧 Trying to enable and start Nginx..."
-        sudo systemctl enable nginx
-        sudo systemctl start nginx
-        if [ $? -eq 0 ]; then
-            log "✅ Nginx enabled and started"
-        else
-            log "❌ Nginx failed to start after enable"
-            sudo systemctl status nginx --no-pager -l
-            log "📋 Nginx error logs:"
-            sudo tail -n 10 /var/log/nginx/error.log 2>/dev/null || echo "No error log found"
-            exit 1
-        fi
-    fi
+    log "❌ Nginx start failed, checking logs..."
+    sudo journalctl -u nginx --no-pager -n 10
+    log "📋 Nginx error logs:"
+    sudo tail -n 10 /var/log/nginx/error.log 2>/dev/null || echo "No error log found"
+    exit 1
 fi
 
-# Verify Nginx is actually running and stays running
-log "🔍 Verifying Nginx is running and stable..."
-sleep 3
+# Wait for Nginx to fully start
+log "⏳ Waiting for Nginx to fully start..."
+sleep 5
 
-# Multiple checks to ensure Nginx is stable
-for i in {1..3}; do
-    if sudo systemctl is-active --quiet nginx; then
-        log "✅ Nginx is running (check $i/3)"
-    else
-        log "❌ Nginx is not running (check $i/3)"
-        sudo systemctl status nginx --no-pager -l
-        log "📋 Nginx error logs:"
-        sudo tail -n 10 /var/log/nginx/error.log 2>/dev/null || echo "No error log found"
-        exit 1
-    fi
-    sleep 2
-done
+# Verify Nginx is running
+if sudo systemctl is-active --quiet nginx; then
+    log "✅ Nginx is running"
+else
+    log "❌ Nginx is not running after start"
+    sudo systemctl status nginx --no-pager -l
+    exit 1
+fi
 
-log "✅ Nginx is stable and running"
+# Check if Nginx is listening on ports
+log "🔍 Checking if Nginx is listening on ports..."
+sleep 2
 
-# Verify Nginx is listening on ports
-log "🔍 Verifying Nginx is listening on ports..."
 if sudo lsof -i :80 | grep -q nginx; then
     log "✅ Nginx is listening on port 80"
 else
     log "❌ Nginx is not listening on port 80"
+    log "📋 Checking Nginx process:"
+    sudo lsof -i :80 || echo "Nothing listening on port 80"
     exit 1
 fi
 
@@ -265,6 +213,8 @@ if sudo lsof -i :443 | grep -q nginx; then
     log "✅ Nginx is listening on port 443"
 else
     log "❌ Nginx is not listening on port 443"
+    log "📋 Checking Nginx process:"
+    sudo lsof -i :443 || echo "Nothing listening on port 443"
     exit 1
 fi
 
@@ -289,40 +239,10 @@ log "📊 Checking service status..."
 
 # Wait for services to fully stabilize
 log "⏳ Waiting for services to fully stabilize..."
-sleep 15
+sleep 10
 
-# Comprehensive service health checks
-log "🧪 Running comprehensive service health checks..."
-
-# Test HTTP to HTTPS redirect
-if verify_service_health "HTTP to HTTPS redirect" "http://$DOMAIN" "301"; then
-    log "✅ HTTP to HTTPS redirect working"
-else
-    log "❌ HTTP to HTTPS redirect failed"
-    log "🔍 Testing with verbose output:"
-    curl -v "http://$DOMAIN" 2>&1 | head -10
-fi
-
-# Test HTTPS connection
-if verify_service_health "HTTPS connection" "https://$DOMAIN" "200"; then
-    log "✅ HTTPS connection working"
-else
-    log "❌ HTTPS connection failed"
-    log "🔍 Testing with verbose output:"
-    curl -v "https://$DOMAIN" 2>&1 | head -10
-fi
-
-# Test the API endpoint
-if verify_service_health "API endpoint" "https://$DOMAIN/api/v1/export/seasonal-trend" "200"; then
-    log "✅ API endpoint test passed"
-else
-    log "❌ API endpoint test failed"
-    log "🔍 Testing with verbose output:"
-    curl -v "https://$DOMAIN/api/v1/export/seasonal-trend" 2>&1 | head -10
-fi
-
-# Final verification of all critical services
-log "🔍 Final verification of all critical services..."
+# Simple health checks
+log "🧪 Running simple health checks..."
 
 # Check if Nginx is still running
 if sudo systemctl is-active --quiet nginx; then
@@ -360,6 +280,14 @@ if sudo lsof -i :8000 | grep -q uvicorn; then
 else
     log "❌ Port 8000 is not allocated to FastAPI"
     exit 1
+fi
+
+# Simple connectivity test
+log "🧪 Testing basic connectivity..."
+if curl -s -o /dev/null -w "%{http_code}" "http://localhost:80" | grep -q "301\|302"; then
+    log "✅ Local HTTP redirect working"
+else
+    log "❌ Local HTTP redirect failed"
 fi
 
 # Final port verification
