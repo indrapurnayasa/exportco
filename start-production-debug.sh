@@ -132,22 +132,35 @@ sleep 5
 # Step 8: Verify services
 print_status "Step 8: Verifying services..."
 
-# Check if processes are running
+# Check if processes are running - use multiple methods
 HTTP_RUNNING=false
 HTTPS_RUNNING=false
 
+# Method 1: Check if PID is valid
 if kill -0 "$HTTP_PID" 2>/dev/null; then
     HTTP_RUNNING=true
     print_success "HTTP process is running (PID: $HTTP_PID)"
 else
-    print_error "HTTP process failed to start"
+    # Method 2: Check if process exists by name and port
+    if pgrep -f "uvicorn.*127.0.0.1:8000" > /dev/null; then
+        HTTP_RUNNING=true
+        print_success "HTTP process is running (found by port)"
+    else
+        print_error "HTTP process failed to start"
+    fi
 fi
 
 if kill -0 "$HTTPS_PID" 2>/dev/null; then
     HTTPS_RUNNING=true
     print_success "HTTPS process is running (PID: $HTTPS_PID)"
 else
-    print_error "HTTPS process failed to start"
+    # Method 2: Check if process exists by name and port
+    if pgrep -f "uvicorn.*0.0.0.0:8443" > /dev/null; then
+        HTTPS_RUNNING=true
+        print_success "HTTPS process is running (found by port)"
+    else
+        print_error "HTTPS process failed to start"
+    fi
 fi
 
 # Check port usage
@@ -217,7 +230,8 @@ echo "=========================================="
 echo "📊 STARTUP SUMMARY"
 echo "=========================================="
 
-if [ "$HTTP_RUNNING" = true ] && [ "$HTTPS_RUNNING" = true ] && [ "$HTTP_STATUS" = "200" ] && [ "$HTTPS_STATUS" = "200" ]; then
+# Check if services are actually working based on endpoint tests
+if [ "$HTTP_STATUS" = "200" ] && [ "$HTTPS_STATUS" = "200" ]; then
     print_success "🎉 ALL SERVICES STARTED SUCCESSFULLY!"
     echo ""
     echo "=== YOUR PRODUCTION ENDPOINTS ==="
@@ -242,7 +256,7 @@ else
     echo "=== TROUBLESHOOTING ==="
     echo "1. Check logs: tail -f logs/uvicorn-*.log"
     echo "2. Check processes: ps aux | grep uvicorn"
-    echo "3. Check ports: sudo lsof -i :8000 :8432"
+    echo "3. Check ports: sudo lsof -i :8000 :8443"
     echo "4. Restart: ./stop-production.sh && ./start-production.sh"
     echo ""
 fi
