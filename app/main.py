@@ -14,16 +14,18 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
-# Set up CORS middleware - COMMENTED OUT to avoid duplicate headers
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["https://service-exportin.vercel.app",
-#                    "https://exportin.vercel.app", "http://localhost:3000"],
-#     # allow_origins=settings.ALLOWED_HOSTS,
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+# Set up CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://service-exportin.vercel.app",
+                   "https://exportin.vercel.app", 
+                   "http://localhost:3000",
+                   "http://localhost:3001",
+                   "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Add logging middleware
 app.add_middleware(LoggingMiddleware)
