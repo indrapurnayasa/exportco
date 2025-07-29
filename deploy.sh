@@ -93,15 +93,47 @@ sudo ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
 sudo nginx -t
 check_status "Nginx configuration test"
 
-# Check if nginx service is active and handle accordingly
+# Enhanced Nginx service management
+log "🌐 Managing Nginx service..."
+
+# Check current Nginx status
 if sudo systemctl is-active --quiet nginx; then
     log "🔄 Nginx is active, reloading..."
     sudo systemctl reload nginx
-    check_status "Nginx reloaded"
+    if [ $? -eq 0 ]; then
+        log "✅ Nginx reloaded successfully"
+    else
+        log "❌ Nginx reload failed, trying restart..."
+        sudo systemctl restart nginx
+        check_status "Nginx restarted"
+    fi
 else
     log "⚠️  Nginx is not active, starting service..."
+    
+    # Try to start Nginx
     sudo systemctl start nginx
-    check_status "Nginx started"
+    if [ $? -eq 0 ]; then
+        log "✅ Nginx started successfully"
+    else
+        log "❌ Nginx start failed, checking logs..."
+        sudo journalctl -u nginx --no-pager -n 10
+        log "🔧 Trying to enable and start Nginx..."
+        sudo systemctl enable nginx
+        sudo systemctl start nginx
+        check_status "Nginx enabled and started"
+    fi
+fi
+
+# Verify Nginx is actually running
+sleep 2
+if sudo systemctl is-active --quiet nginx; then
+    log "✅ Nginx is now running"
+else
+    log "❌ Nginx failed to start, showing detailed status..."
+    sudo systemctl status nginx --no-pager -l
+    log "📋 Nginx error logs:"
+    sudo tail -n 10 /var/log/nginx/error.log 2>/dev/null || echo "No error log found"
+    exit 1
 fi
 
 # Start FastAPI service
