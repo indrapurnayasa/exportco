@@ -14,8 +14,15 @@ class Settings:
     DESCRIPTION: str = "API for Hackathon Service"
     API_V1_STR: str = "/api/v1"
     
-    # Database settings
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://maverick:Hackathon2025@localhost:5432/hackathondb")
+    # Database settings - use environment variables
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "hackathondb")
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "maverick")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "Hackathon2025")
+    POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
+    
+    # Construct DATABASE_URL from components
+    DATABASE_URL: str = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
     
     # Production database settings
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "20"))
