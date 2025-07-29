@@ -35,6 +35,19 @@ def _check_rate_limit(client_id: str = "default"):
     # Add current request timestamp
     _request_timestamps[client_id].append(current_time)
 
+@router.get("/health-fast")
+async def health_check_fast():
+    """
+    Fast health check endpoint for Vercel integration.
+    Returns immediately without database queries.
+    """
+    return {
+        "status": "healthy",
+        "service": "export-api",
+        "version": "1.0.0",
+        "timestamp": time.time()
+    }
+
 @router.get("/seasonal-trend", response_model=SeasonalTrendResponse)
 async def get_seasonal_trend(
     endDate: str = None,

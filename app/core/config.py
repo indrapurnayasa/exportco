@@ -46,9 +46,9 @@ class Settings:
     CACHE_TTL: int = int(os.getenv("CACHE_TTL", "300"))  # 5 minutes
     CACHE_MAX_SIZE: int = int(os.getenv("CACHE_MAX_SIZE", "1000"))
     
-    # Query limits for production
-    MAX_QUERY_LIMIT: int = int(os.getenv("MAX_QUERY_LIMIT", "10000"))
-    QUERY_TIMEOUT: int = int(os.getenv("QUERY_TIMEOUT", "30"))
+    # Query limits for production - OPTIMIZED FOR VERCEL
+    MAX_QUERY_LIMIT: int = int(os.getenv("MAX_QUERY_LIMIT", "1000"))  # Reduced from 10000
+    QUERY_TIMEOUT: int = int(os.getenv("QUERY_TIMEOUT", "8"))  # Reduced from 30 to 8 seconds for Vercel
     
     # Logging settings
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
