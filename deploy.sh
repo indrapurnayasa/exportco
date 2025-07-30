@@ -555,25 +555,40 @@ sleep 10
 
 # Function to kill ports
 kill_ports() {
-    log "Killing processes on ports 80, 443, 8000..."
+    log "Force killing processes on ports 80, 443, 8000..."
     
-    # Kill processes on specific ports
+    # Force kill processes on specific ports
     sudo fuser -k 80/tcp 2>/dev/null || true
     sudo fuser -k 443/tcp 2>/dev/null || true
     sudo fuser -k 8000/tcp 2>/dev/null || true
     
-    log "Ports cleared"
+    # Additional force kill for any remaining processes
+    sudo pkill -f "nginx" 2>/dev/null || true
+    sudo pkill -f "uvicorn" 2>/dev/null || true
+    sudo pkill -f "python.*8000" 2>/dev/null || true
+    
+    # Wait a moment for processes to fully stop
+    sleep 3
+    
+    log "Ports and processes force killed"
 }
 
 # Function to restart nginx
 restart_nginx() {
-    log "Restarting nginx..."
+    log "Force restarting nginx..."
+    
+    # Stop nginx forcefully
+    sudo systemctl stop nginx 2>/dev/null || true
+    sudo pkill -f "nginx" 2>/dev/null || true
+    
+    # Wait for nginx to fully stop
+    sleep 2
     
     # Test nginx configuration
     sudo nginx -t
     
-    # Restart nginx
-    sudo systemctl restart nginx
+    # Start nginx
+    sudo systemctl start nginx
     sudo systemctl status nginx --no-pager -l
 }
 
@@ -601,13 +616,21 @@ check_database() {
 
 # Function to start service
 start_service() {
-    log "Starting hackathon service..."
+    log "Force starting hackathon service..."
+    
+    # Stop service forcefully if running
+    sudo systemctl stop hackathon-service 2>/dev/null || true
+    sudo pkill -f "hackathon-service" 2>/dev/null || true
+    sudo pkill -f "uvicorn.*8000" 2>/dev/null || true
+    
+    # Wait for service to fully stop
+    sleep 3
     
     # Start the service
     sudo systemctl start hackathon-service
     
     # Wait for service to start
-    sleep 10
+    sleep 15
     
     # Check service status
     if systemctl is-active --quiet hackathon-service; then
@@ -719,12 +742,35 @@ case "${1:-deploy}" in
         start_service
         ;;
     full-restart)
-        log "Performing full restart..."
+        log "Performing FORCE full restart..."
+        log "This will force kill all processes and restart everything..."
+        
+        # Force kill all related processes
         kill_ports
+        
+        # Force restart nginx
         restart_nginx
+        
+        # Check and restart database if needed
         check_database
+        
+        # Force restart service
         start_service
-        log "Full restart completed!"
+        
+        # Final verification
+        log "Verifying all services..."
+        sleep 5
+        
+        # Check final status
+        if systemctl is-active --quiet hackathon-service && systemctl is-active --quiet nginx; then
+            log "✅ FORCE full restart completed successfully!"
+            log "Testing endpoints..."
+            curl -s -f http://localhost:8000/health >/dev/null 2>&1 && log "✅ Local health check OK" || log "❌ Local health check failed"
+            curl -s -f https://dev-ngurah.fun/health >/dev/null 2>&1 && log "✅ External health check OK" || log "❌ External health check failed"
+        else
+            log "❌ Some services failed to start properly"
+            sudo systemctl status hackathon-service nginx --no-pager -l
+        fi
         ;;
     help|--help|-h)
         usage
