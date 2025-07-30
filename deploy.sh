@@ -118,6 +118,98 @@ setup_application() {
     /opt/miniconda3/bin/conda run -n hackathon-env pip install -r requirements.txt
 }
 
+# Set up PostgreSQL database
+setup_postgresql() {
+    log "Setting up PostgreSQL database..."
+    
+    # Start and enable PostgreSQL
+    systemctl start postgresql
+    systemctl enable postgresql
+    
+    # Wait for PostgreSQL to be ready
+    log "Waiting for PostgreSQL to be ready..."
+    sleep 5
+    
+    # Check if PostgreSQL is running
+    if ! systemctl is-active --quiet postgresql; then
+        error "PostgreSQL failed to start"
+    fi
+    
+    # Create database and user (only if they don't exist)
+    sudo -u postgres psql << EOF
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'hackathondb') THEN
+        CREATE DATABASE hackathondb;
+    END IF;
+END
+\$\$;
+
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_user WHERE usename = 'maverick') THEN
+        CREATE USER maverick WITH PASSWORD 'Hackathon2025';
+    END IF;
+END
+\$\$;
+
+GRANT ALL PRIVILEGES ON DATABASE hackathondb TO maverick;
+ALTER USER maverick CREATEDB;
+\q
+EOF
+    
+    log "PostgreSQL database setup completed"
+}
+
+# Create .env file with database configuration
+create_env_file() {
+    log "Creating environment configuration..."
+    
+    cat > /opt/$SERVICE_NAME/.env << EOF
+# Database Configuration
+DATABASE_URL=postgresql://maverick:Hackathon2025@localhost:5432/hackathondb
+POSTGRES_DB=hackathondb
+POSTGRES_USER=maverick
+POSTGRES_PASSWORD=Hackathon2025
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+
+# API Configuration
+PROJECT_NAME=Hackathon Service API
+VERSION=1.0.0
+DESCRIPTION=A FastAPI service for hackathon management
+API_V1_STR=/api/v1
+
+# Security Configuration
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+SECRET_KEY=your-secret-key-here-change-in-production
+
+# OpenAI Configuration
+OPENAI_API_KEY=your-openai-api-key-here
+OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+
+# Logging Configuration
+LOG_LEVEL=INFO
+DEBUG=false
+EOF
+
+    chown $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/.env
+    log "Environment file created"
+}
+
+# Run database migrations
+run_migrations() {
+    log "Running database migrations..."
+    
+    cd /opt/$SERVICE_NAME
+    
+    # Run alembic migrations
+    /opt/miniconda3/bin/conda run -n hackathon-env alembic upgrade head
+    
+    log "Database migrations completed"
+}
+
 # Set up PostgreSQL
 setup_postgresql() {
     log "Setting up PostgreSQL database..."
