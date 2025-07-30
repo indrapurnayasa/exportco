@@ -27,7 +27,7 @@ log() {
 
 error() {
     echo -e "${RED}[ERROR] $1${NC}"
-    exit 1
+        exit 1
 }
 
 warning() {
@@ -210,81 +210,16 @@ run_migrations() {
     log "Database migrations completed"
 }
 
-# Set up PostgreSQL
-setup_postgresql() {
-    log "Setting up PostgreSQL database..."
-    systemctl start postgresql
-    systemctl enable postgresql
-
-    # Create database and user
-    sudo -u postgres psql << EOF
-CREATE DATABASE hackathondb;
-CREATE USER maverick WITH PASSWORD 'Hackathon2025';
-GRANT ALL PRIVILEGES ON DATABASE hackathondb TO maverick;
-ALTER USER maverick CREATEDB;
-\q
-EOF
-}
-
-# Create .env file
-create_env_file() {
-    log "Creating environment configuration..."
-    cat > /opt/$SERVICE_NAME/.env << EOF
-# API Configuration
-PROJECT_NAME=Hackathon Service API
-VERSION=1.0.0
-DESCRIPTION=A FastAPI service for hackathon management
-API_V1_STR=/api/v1
-
-# Server Configuration
-HOST=0.0.0.0
-PORT=8000
-DEBUG=false
-
-# CORS Configuration
-ALLOWED_HOSTS=["*"]
-
-# OpenAI API Configuration
-OPENAI_API_KEY=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
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
-
-# PostgreSQL Database Configuration
-POSTGRES_DB=hackathondb
-POSTGRES_USER=maverick
-POSTGRES_PASSWORD=Hackathon2025
-POSTGRES_HOST=101.50.2.59
-POSTGRES_PORT=5432
-DATABASE_URL=postgresql://maverick:Hackathon2025@localhost:5432/hackathondb
-
-# Security Configuration
-SECRET_KEY=$(openssl rand -hex 32)
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-ALGORITHM=HS256
-
-# Logging Configuration
-LOG_LEVEL=INFO
-
-# Production settings
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=30
-DB_POOL_TIMEOUT=30
-DB_POOL_RECYCLE=3600
-RATE_LIMIT_REQUESTS=100
-RATE_LIMIT_WINDOW=1
-CACHE_TTL=300
-CACHE_MAX_SIZE=1000
-MAX_QUERY_LIMIT=10000
-QUERY_TIMEOUT=30
-EOF
-
-    chown $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/.env
-}
-
 # Run database migrations
 run_migrations() {
     log "Running database migrations..."
+    
     cd /opt/$SERVICE_NAME
+    
+    # Run alembic migrations
     /opt/miniconda3/bin/conda run -n hackathon-env alembic upgrade head
+    
+    log "Database migrations completed"
 }
 
 # Create systemd service file
@@ -350,13 +285,13 @@ server {
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
-    gzip_proxied expired no-cache no-store private must-revalidate auth;
+    gzip_proxied expired no-cache no-store private auth;
     gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/javascript;
     
     # Client max body size
     client_max_body_size 100M;
     
-    # Proxy settings
+    # Proxy settings for FastAPI
     location / {
         proxy_pass http://localhost:$APP_PORT;
         proxy_http_version 1.1;
@@ -369,6 +304,29 @@ server {
         proxy_cache_bypass \$http_upgrade;
         proxy_read_timeout 86400;
         proxy_send_timeout 86400;
+    }
+    
+    # Specific proxy for /docs
+    location /docs {
+        proxy_pass http://localhost:$APP_PORT/docs;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+    }
+    
+    # Proxy for OpenAPI JSON
+    location /openapi.json {
+        proxy_pass http://localhost:$APP_PORT/openapi.json;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
     
     # Health check endpoint
@@ -391,7 +349,7 @@ EOF
     
     # Remove default nginx site
     rm -f /etc/nginx/sites-enabled/default
-    
+
     # Test nginx configuration
     nginx -t
     
@@ -565,9 +523,9 @@ deploy() {
     systemctl start $SERVICE_NAME
     
     # Wait a moment for the service to start
-    sleep 10
-    
-    # Check service status
+sleep 10
+
+# Check service status
     if systemctl is-active --quiet $SERVICE_NAME; then
         log "✅ Service started successfully!"
     else
