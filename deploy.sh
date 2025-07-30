@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # Configuration
 SERVICE_NAME="hackathon-service"
 NGINX_SITE_NAME="hackathon-service"
-DOMAIN_NAME="your-domain.com"  # Change this to your actual domain
+DOMAIN_NAME="dev-ngurah.fun"  # Change this to your actual domain
 APP_PORT=8000
 NGINX_PORT=80
 SSL_PORT=443
@@ -171,7 +171,7 @@ DATABASE_URL=postgresql://maverick:Hackathon2025@localhost:5432/hackathondb
 POSTGRES_DB=hackathondb
 POSTGRES_USER=maverick
 POSTGRES_PASSWORD=Hackathon2025
-POSTGRES_HOST=localhost
+POSTGRES_HOST=101.50.2.59
 POSTGRES_PORT=5432
 
 # API Configuration
@@ -245,14 +245,14 @@ DEBUG=false
 ALLOWED_HOSTS=["*"]
 
 # OpenAI API Configuration
-OPENAI_API_KEY=your-openai-api-key-here
+OPENAI_API_KEY=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
 OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 
 # PostgreSQL Database Configuration
 POSTGRES_DB=hackathondb
 POSTGRES_USER=maverick
 POSTGRES_PASSWORD=Hackathon2025
-POSTGRES_HOST=localhost
+POSTGRES_HOST=101.50.2.59
 POSTGRES_PORT=5432
 DATABASE_URL=postgresql://maverick:Hackathon2025@localhost:5432/hackathondb
 

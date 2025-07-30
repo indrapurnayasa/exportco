@@ -1,14 +1,8 @@
 #!/bin/bash
 
-# Production Service with SSL
-# This script starts the FastAPI service behind Nginx
-
 echo "=========================================="
 echo "🚀 STARTING PRODUCTION SERVICE WITH SSL"
 echo "=========================================="
-
-# Get domain from environment or use default
-DOMAIN=${DOMAIN:-"yourdomain.com"}
 
 # Kill any processes using our ports first
 echo "🛑 Clearing ports before startup..."
@@ -40,9 +34,9 @@ sleep 5
 if pgrep -f "uvicorn.*app.main:app" > /dev/null; then
     echo "✅ FastAPI service started successfully"
     echo "🌐 Your API is now available at:"
-    echo "   https://$DOMAIN/api/v1/export/seasonal-trend"
-    echo "   https://$DOMAIN/docs"
-    echo "   https://$DOMAIN/health"
+    echo "   https://dev-ngurah.fun/api/v1/export/seasonal-trend"
+    echo "   https://dev-ngurah.fun/docs"
+    echo "   https://dev-ngurah.fun/health"
     echo ""
     echo "📝 Logs are available at: logs/uvicorn-ssl.log"
     echo "🔍 To monitor logs: tail -f logs/uvicorn-ssl.log"
