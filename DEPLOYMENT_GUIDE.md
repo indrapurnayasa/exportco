@@ -85,7 +85,7 @@ sudo ./deploy.sh monitor
 ### 1. System Setup
 - Updates system packages
 - Installs Python 3, pip, and virtual environments
-- Installs Docker and Docker Compose
+- Installs uvicorn for FastAPI
 - Installs nginx web server
 - Installs additional tools (curl, wget, git, unzip)
 
@@ -96,7 +96,7 @@ sudo ./deploy.sh monitor
 - Creates logs and backups directories
 
 ### 3. Service Configuration
-- Creates systemd service file for auto-start
+- Creates systemd service file for auto-start (runs uvicorn directly)
 - Configures nginx as reverse proxy
 - Sets up firewall rules (SSH, HTTP, HTTPS)
 - Creates backup and monitoring scripts
@@ -182,8 +182,8 @@ sudo systemctl status hackathon-service
 # View detailed logs
 sudo journalctl -u hackathon-service -f
 
-# Check Docker containers
-sudo docker ps -a
+# Check Python processes
+ps aux | grep -E "(uvicorn|python.*app.main)" | grep -v grep
 ```
 
 ### Nginx Issues
@@ -237,7 +237,7 @@ The deployment includes several performance optimizations:
 
 ## Environment Variables
 
-Make sure to configure the following environment variables in your `docker-compose.yml`:
+Make sure to configure the following environment variables in your `.env` file:
 
 - `DATABASE_URL`: PostgreSQL connection string
 - `OPENAI_API_KEY`: OpenAI API key

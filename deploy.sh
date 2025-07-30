@@ -62,19 +62,11 @@ install_dependencies() {
     # Install nginx
     apt-get install -y nginx
     
-    # Install Docker and Docker Compose
-    apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-    apt-get update -y
-    apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-    
     # Install additional tools
     apt-get install -y curl wget git unzip
     
-    # Start and enable Docker
-    systemctl start docker
-    systemctl enable docker
+    # Install uvicorn for FastAPI
+    pip3 install uvicorn[standard]
 }
 
 # Create application directory and user
@@ -97,6 +89,11 @@ setup_application() {
     # Create logs and backups directories
     mkdir -p /opt/$SERVICE_NAME/logs /opt/$SERVICE_NAME/backups
     chown -R $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/logs /opt/$SERVICE_NAME/backups
+    
+    # Install Python dependencies
+    log "Installing Python dependencies..."
+    cd /opt/$SERVICE_NAME
+    pip3 install -r requirements.txt
 }
 
 # Create systemd service file
@@ -106,19 +103,18 @@ create_systemd_service() {
     cat > /etc/systemd/system/$SERVICE_NAME.service << EOF
 [Unit]
 Description=Hackathon Service API
-After=network.target docker.service
-Requires=docker.service
+After=network.target
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
+Type=simple
 WorkingDirectory=/opt/$SERVICE_NAME
-ExecStart=/usr/bin/docker-compose up -d
-ExecStop=/usr/bin/docker-compose down
+ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 User=$SERVICE_NAME
 Group=$SERVICE_NAME
 Restart=always
 RestartSec=10
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
@@ -300,9 +296,9 @@ echo "Systemd Service Status:"
 systemctl status $SERVICE_NAME --no-pager -l
 echo ""
 
-# Check Docker containers
-echo "Docker Containers:"
-docker ps -a
+# Check Python processes
+echo "Python/Uvicorn Processes:"
+ps aux | grep -E "(uvicorn|python.*app.main)" | grep -v grep
 echo ""
 
 # Check nginx status
@@ -401,7 +397,7 @@ deploy() {
     log "1. Update DOMAIN_NAME in this script and run setup_ssl()"
     log "2. Configure your domain DNS to point to this server"
     log "3. Set up SSL certificates with Let's Encrypt"
-    log "4. Configure environment variables in docker-compose.yml"
+    log "4. Configure environment variables in .env file"
 }
 
 # Function to show usage
@@ -427,6 +423,9 @@ update_service() {
     # Pull latest changes
     cd /opt/$SERVICE_NAME
     git pull origin main
+    
+    # Install/update Python dependencies
+    pip3 install -r requirements.txt
     
     # Restart service
     systemctl restart $SERVICE_NAME
