@@ -1,329 +1,495 @@
 #!/bin/bash
 
-echo "=========================================="
-echo "🚀 STARTING DEPLOYMENT"
-echo "=========================================="
+# Hackathon Service Deployment Script
+# This script sets up the FastAPI service with nginx auto-start
 
-# Set domain
-DOMAIN="dev-ngurah.fun"
+set -e  # Exit on any error
 
-# Function to log with timestamp
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration
+SERVICE_NAME="hackathon-service"
+NGINX_SITE_NAME="hackathon-service"
+DOMAIN_NAME="your-domain.com"  # Change this to your actual domain
+APP_PORT=8000
+NGINX_PORT=80
+SSL_PORT=443
+
+# Logging function
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] $1${NC}"
 }
 
-# Function to check if command succeeded
-check_status() {
-    if [ $? -eq 0 ]; then
-        log "✅ $1"
-    else
-        log "❌ $1"
-        exit 1
+error() {
+    echo -e "${RED}[ERROR] $1${NC}"
+    exit 1
+}
+
+warning() {
+    echo -e "${YELLOW}[WARNING] $1${NC}"
+}
+
+info() {
+    echo -e "${BLUE}[INFO] $1${NC}"
+}
+
+# Check if running as root
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        error "This script must be run as root (use sudo)"
     fi
 }
 
-# Function to check port availability
-check_port() {
-    local port=$1
-    local service_name=$2
+# Update system packages
+update_system() {
+    log "Updating system packages..."
+    apt-get update -y
+    apt-get upgrade -y
+}
+
+# Install system dependencies
+install_dependencies() {
+    log "Installing system dependencies..."
     
-    log "🔍 Checking port $port ($service_name)..."
-    if sudo lsof -i :$port >/dev/null 2>&1; then
-        log "⚠️  Port $port is in use by:"
-        sudo lsof -i :$port
-        return 1
-    else
-        log "✅ Port $port is free"
-        return 0
+    # Install Python and pip
+    apt-get install -y python3 python3-pip python3-venv
+    
+    # Install nginx
+    apt-get install -y nginx
+    
+    # Install Docker and Docker Compose
+    apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    apt-get update -y
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    
+    # Install additional tools
+    apt-get install -y curl wget git unzip
+    
+    # Start and enable Docker
+    systemctl start docker
+    systemctl enable docker
+}
+
+# Create application directory and user
+setup_application() {
+    log "Setting up application directory and user..."
+    
+    # Create application user
+    if ! id -u $SERVICE_NAME &>/dev/null; then
+        useradd -r -s /bin/bash -d /opt/$SERVICE_NAME $SERVICE_NAME
     fi
+    
+    # Create application directory
+    mkdir -p /opt/$SERVICE_NAME
+    chown $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME
+    
+    # Copy application files
+    cp -r . /opt/$SERVICE_NAME/
+    chown -R $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME
+    
+    # Create logs and backups directories
+    mkdir -p /opt/$SERVICE_NAME/logs /opt/$SERVICE_NAME/backups
+    chown -R $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/logs /opt/$SERVICE_NAME/backups
 }
 
-# STEP 1: Pre-deployment checks and cleanup
-log "🔍 STEP 1: Pre-deployment checks and cleanup"
+# Create systemd service file
+create_systemd_service() {
+    log "Creating systemd service..."
+    
+    cat > /etc/systemd/system/$SERVICE_NAME.service << EOF
+[Unit]
+Description=Hackathon Service API
+After=network.target docker.service
+Requires=docker.service
 
-# Check all required ports
-log "🔍 Checking port availability..."
-check_port 80 "HTTP"
-check_port 443 "HTTPS"
-check_port 8000 "FastAPI"
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/$SERVICE_NAME
+ExecStart=/usr/bin/docker-compose up -d
+ExecStop=/usr/bin/docker-compose down
+User=$SERVICE_NAME
+Group=$SERVICE_NAME
+Restart=always
+RestartSec=10
 
-# Kill any processes using our ports
-log "🛑 Clearing ports..."
-./kill-ports.sh
-check_status "Ports cleared"
+[Install]
+WantedBy=multi-user.target
+EOF
 
-# Verify ports are now free
-log "🔍 Verifying ports are free after cleanup..."
-check_port 80 "HTTP"
-check_port 443 "HTTPS"
-check_port 8000 "FastAPI"
+    # Reload systemd and enable service
+    systemctl daemon-reload
+    systemctl enable $SERVICE_NAME.service
+}
 
-# STEP 2: Code and environment setup
-log "📥 STEP 2: Code and environment setup"
-
-# Pull latest code
-log "📥 Pulling latest code..."
-git pull origin main
-check_status "Code pulled"
-
-# Activate conda environment
-log "🐍 Activating conda environment..."
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate hackathon-env
-check_status "Conda environment activated"
-
-# Install/update dependencies
-log "📦 Installing dependencies..."
-pip install -r requirements.txt
-check_status "Dependencies installed"
-
-# STEP 3: SSL certificate management
-log "🔐 STEP 3: SSL certificate management"
-
-# Check SSL certificate
-log "🔐 Checking SSL certificate..."
-if ! sudo certbot certificates | grep -q "$DOMAIN"; then
-    log "⚠️  SSL certificate not found, generating..."
-    sudo systemctl stop nginx
-    sudo certbot certonly --standalone -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos --email admin@$DOMAIN
-    sudo systemctl start nginx
-    check_status "SSL certificate generated"
-else
-    log "✅ SSL certificate exists"
-fi
-
-# Verify SSL certificate files
-log "🔐 Verifying SSL certificate files..."
-CERT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
-
-if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
-    log "❌ SSL certificate files missing"
-    log "🔧 Regenerating SSL certificate..."
-    sudo systemctl stop nginx
-    sudo certbot certonly --standalone -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos --email admin@$DOMAIN
-    sudo systemctl start nginx
-    check_status "SSL certificate regenerated"
-fi
-
-# Fix SSL certificate permissions
-log "🔧 Fixing SSL certificate permissions..."
-sudo chmod 644 "$CERT_PATH" 2>/dev/null || true
-sudo chmod 600 "$KEY_PATH" 2>/dev/null || true
-sudo chown root:root "$CERT_PATH" "$KEY_PATH" 2>/dev/null || true
-
-# STEP 4: Nginx configuration
-log "🌐 STEP 4: Nginx configuration"
-
-# Create/update nginx configuration
-log "🌐 Updating nginx configuration..."
-sudo tee /etc/nginx/sites-available/$DOMAIN << 'NGINX_EOF'
+# Configure nginx
+configure_nginx() {
+    log "Configuring nginx..."
+    
+    # Create nginx site configuration
+    cat > /etc/nginx/sites-available/$NGINX_SITE_NAME << EOF
 server {
-    listen 80;
-    server_name dev-ngurah.fun www.dev-ngurah.fun;
-    return 301 https://$server_name$request_uri;
+    listen $NGINX_PORT;
+    server_name $DOMAIN_NAME;
+    
+    # Redirect HTTP to HTTPS
+    return 301 https://\$server_name\$request_uri;
 }
 
 server {
-    listen 443 ssl http2;
-    server_name dev-ngurah.fun www.dev-ngurah.fun;
+    listen $SSL_PORT ssl http2;
+    server_name $DOMAIN_NAME;
     
-    ssl_certificate /etc/letsencrypt/live/dev-ngurah.fun/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/dev-ngurah.fun/privkey.pem;
+    # SSL Configuration (you'll need to add your SSL certificates)
+    # ssl_certificate /path/to/your/certificate.crt;
+    # ssl_certificate_key /path/to/your/private.key;
     
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+    add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
     
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied expired no-cache no-store private must-revalidate auth;
+    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/javascript;
+    
+    # Client max body size
+    client_max_body_size 100M;
+    
+    # Proxy settings
     location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://localhost:$APP_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+    
+    # Health check endpoint
+    location /health {
+        proxy_pass http://localhost:$APP_PORT/health;
+        access_log off;
+    }
+    
+    # Static files (if any)
+    location /static/ {
+        alias /opt/$SERVICE_NAME/static/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
     }
 }
-NGINX_EOF
+EOF
 
-# Enable nginx configuration
-sudo rm -f /etc/nginx/sites-enabled/*
-sudo ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
+    # Enable the site
+    ln -sf /etc/nginx/sites-available/$NGINX_SITE_NAME /etc/nginx/sites-enabled/
+    
+    # Remove default nginx site
+    rm -f /etc/nginx/sites-enabled/default
+    
+    # Test nginx configuration
+    nginx -t
+    
+    # Restart nginx
+    systemctl restart nginx
+    systemctl enable nginx
+}
 
-# Test nginx configuration
-log "🔧 Testing nginx configuration..."
-sudo nginx -t
-check_status "Nginx configuration test"
+# Setup SSL with Let's Encrypt (optional)
+setup_ssl() {
+    info "Setting up SSL with Let's Encrypt..."
+    
+    # Install certbot
+    apt-get install -y certbot python3-certbot-nginx
+    
+    # Get SSL certificate
+    if [ "$DOMAIN_NAME" != "your-domain.com" ]; then
+        certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos --email admin@$DOMAIN_NAME
+    else
+        warning "Please update DOMAIN_NAME in the script and run certbot manually:"
+        warning "certbot --nginx -d your-domain.com"
+    fi
+}
 
-# STEP 5: Nginx service management
-log "🌐 STEP 5: Nginx service management"
+# Create firewall rules
+setup_firewall() {
+    log "Setting up firewall..."
+    
+    # Install ufw if not present
+    apt-get install -y ufw
+    
+    # Allow SSH
+    ufw allow ssh
+    
+    # Allow HTTP and HTTPS
+    ufw allow 80/tcp
+    ufw allow 443/tcp
+    
+    # Enable firewall
+    ufw --force enable
+}
 
-# Simple and reliable Nginx management
-log "🌐 Managing Nginx service..."
+# Create backup script
+create_backup_script() {
+    log "Creating backup script..."
+    
+    cat > /opt/$SERVICE_NAME/backup.sh << 'EOF'
+#!/bin/bash
 
-# Stop Nginx first to ensure clean state
-log "🛑 Stopping Nginx for clean restart..."
-sudo systemctl stop nginx 2>/dev/null || true
-sleep 2
+# Backup script for Hackathon Service
+BACKUP_DIR="/opt/hackathon-service/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_NAME="hackathon_backup_$DATE.tar.gz"
 
-# Enable Nginx to start on boot
-log "🔧 Enabling Nginx service..."
-sudo systemctl enable nginx
-check_status "Nginx enabled"
+# Create backup directory if it doesn't exist
+mkdir -p $BACKUP_DIR
 
-# Start Nginx
-log "🚀 Starting Nginx service..."
-sudo systemctl start nginx
-if [ $? -eq 0 ]; then
-    log "✅ Nginx started successfully"
-else
-    log "❌ Nginx start failed, checking logs..."
-    sudo journalctl -u nginx --no-pager -n 10
-    log "📋 Nginx error logs:"
-    sudo tail -n 10 /var/log/nginx/error.log 2>/dev/null || echo "No error log found"
-    exit 1
-fi
+# Create backup
+tar -czf $BACKUP_DIR/$BACKUP_NAME \
+    --exclude='./logs/*' \
+    --exclude='./backups/*' \
+    --exclude='./.git/*' \
+    --exclude='./__pycache__/*' \
+    --exclude='./*.pyc' \
+    .
 
-# Wait for Nginx to fully start
-log "⏳ Waiting for Nginx to fully start..."
-sleep 5
+# Keep only last 7 backups
+find $BACKUP_DIR -name "hackathon_backup_*.tar.gz" -mtime +7 -delete
 
-# Verify Nginx is running
-if sudo systemctl is-active --quiet nginx; then
-    log "✅ Nginx is running"
-else
-    log "❌ Nginx is not running after start"
-    sudo systemctl status nginx --no-pager -l
-    exit 1
-fi
+echo "Backup created: $BACKUP_NAME"
+EOF
 
-# Check if Nginx is listening on ports
-log "🔍 Checking if Nginx is listening on ports..."
-sleep 2
+    chmod +x /opt/$SERVICE_NAME/backup.sh
+    chown $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/backup.sh
+}
 
-if sudo lsof -i :80 | grep -q nginx; then
-    log "✅ Nginx is listening on port 80"
-else
-    log "❌ Nginx is not listening on port 80"
-    log "📋 Checking Nginx process:"
-    sudo lsof -i :80 || echo "Nothing listening on port 80"
-    exit 1
-fi
+# Create monitoring script
+create_monitoring_script() {
+    log "Creating monitoring script..."
+    
+    cat > /opt/$SERVICE_NAME/monitor.sh << 'EOF'
+#!/bin/bash
 
-if sudo lsof -i :443 | grep -q nginx; then
-    log "✅ Nginx is listening on port 443"
-else
-    log "❌ Nginx is not listening on port 443"
-    log "📋 Checking Nginx process:"
-    sudo lsof -i :443 || echo "Nothing listening on port 443"
-    exit 1
-fi
+# Monitoring script for Hackathon Service
+SERVICE_NAME="hackathon-service"
+APP_PORT=8000
 
-# STEP 6: FastAPI service deployment
-log "🚀 STEP 6: FastAPI service deployment"
+echo "=== Hackathon Service Status ==="
+echo "Date: $(date)"
+echo ""
 
-# Start FastAPI service directly (don't use start-production-ssl.sh as it kills ports)
-log "🚀 Starting FastAPI service..."
+# Check systemd service status
+echo "Systemd Service Status:"
+systemctl status $SERVICE_NAME --no-pager -l
+echo ""
 
-# Check if conda is available and activate environment
-if command -v conda &> /dev/null; then
-    log "🐍 Activating conda environment..."
-    source $(conda info --base)/etc/profile.d/conda.sh
-    conda activate hackathon-env
-else
-    log "🐍 Conda not found, using system Python..."
-fi
+# Check Docker containers
+echo "Docker Containers:"
+docker ps -a
+echo ""
 
-# Create logs directory if it doesn't exist
-mkdir -p logs
+# Check nginx status
+echo "Nginx Status:"
+systemctl status nginx --no-pager -l
+echo ""
 
-# Start FastAPI service (HTTP only, Nginx handles HTTPS)
-log "🚀 Starting FastAPI service on port 8000..."
-nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4 > logs/uvicorn-ssl.log 2>&1 &
+# Check application health
+echo "Application Health Check:"
+curl -f http://localhost:$APP_PORT/health 2>/dev/null && echo "✅ Application is healthy" || echo "❌ Application is not responding"
+echo ""
 
-# Wait for service to start
-sleep 5
+# Check disk usage
+echo "Disk Usage:"
+df -h
+echo ""
 
-# Check if service is running
-if pgrep -f "uvicorn.*app.main:app" > /dev/null; then
-    log "✅ FastAPI service started successfully"
-else
-    log "❌ Failed to start FastAPI service"
-    log "📋 Check logs: tail -f logs/uvicorn-ssl.log"
-    exit 1
-fi
+# Check memory usage
+echo "Memory Usage:"
+free -h
+echo ""
 
-# Wait for services to stabilize
-log "⏳ Waiting for services to stabilize..."
-sleep 10
+# Check recent logs
+echo "Recent Application Logs:"
+tail -n 20 /opt/$SERVICE_NAME/logs/*.log 2>/dev/null || echo "No log files found"
+EOF
 
-# STEP 7: Post-deployment verification
-log "📊 STEP 7: Post-deployment verification"
+    chmod +x /opt/$SERVICE_NAME/monitor.sh
+    chown $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/monitor.sh
+}
 
-# Check service status
-log "📊 Checking service status..."
-./status-production-ssl.sh
+# Create log rotation
+setup_log_rotation() {
+    log "Setting up log rotation..."
+    
+    cat > /etc/logrotate.d/$SERVICE_NAME << EOF
+/opt/$SERVICE_NAME/logs/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 644 $SERVICE_NAME $SERVICE_NAME
+    postrotate
+        systemctl reload $SERVICE_NAME
+    endscript
+}
+EOF
+}
 
-# Wait for services to fully stabilize
-log "⏳ Waiting for services to fully stabilize..."
-sleep 10
+# Main deployment function
+deploy() {
+    log "Starting Hackathon Service deployment..."
+    
+    check_root
+    update_system
+    install_dependencies
+    setup_application
+    create_systemd_service
+    configure_nginx
+    setup_firewall
+    create_backup_script
+    create_monitoring_script
+    setup_log_rotation
+    
+    # Start the service
+    log "Starting the service..."
+    systemctl start $SERVICE_NAME
+    
+    # Wait a moment for the service to start
+    sleep 10
+    
+    # Check service status
+    if systemctl is-active --quiet $SERVICE_NAME; then
+        log "✅ Service started successfully!"
+    else
+        error "❌ Service failed to start. Check logs with: journalctl -u $SERVICE_NAME -f"
+    fi
+    
+    log "Deployment completed successfully!"
+    log ""
+    log "=== Service Information ==="
+    log "Service Name: $SERVICE_NAME"
+    log "Application URL: http://localhost:$APP_PORT"
+    log "Nginx URL: http://$DOMAIN_NAME"
+    log ""
+    log "=== Useful Commands ==="
+    log "Check service status: systemctl status $SERVICE_NAME"
+    log "View service logs: journalctl -u $SERVICE_NAME -f"
+    log "Restart service: systemctl restart $SERVICE_NAME"
+    log "Monitor service: /opt/$SERVICE_NAME/monitor.sh"
+    log "Create backup: /opt/$SERVICE_NAME/backup.sh"
+    log ""
+    log "=== Next Steps ==="
+    log "1. Update DOMAIN_NAME in this script and run setup_ssl()"
+    log "2. Configure your domain DNS to point to this server"
+    log "3. Set up SSL certificates with Let's Encrypt"
+    log "4. Configure environment variables in docker-compose.yml"
+}
 
-# Simple health checks
-log "🧪 Running simple health checks..."
+# Function to show usage
+usage() {
+    echo "Usage: $0 [OPTION]"
+    echo ""
+    echo "Options:"
+    echo "  deploy      Deploy the complete service"
+    echo "  update      Update the service"
+    echo "  restart     Restart the service"
+    echo "  status      Show service status"
+    echo "  logs        Show service logs"
+    echo "  backup      Create backup"
+    echo "  monitor     Run monitoring script"
+    echo "  help        Show this help message"
+    echo ""
+}
 
-# Check if Nginx is still running
-if sudo systemctl is-active --quiet nginx; then
-    log "✅ Nginx service is running"
-else
-    log "❌ Nginx service is not running"
-    exit 1
-fi
+# Function to update service
+update_service() {
+    log "Updating Hackathon Service..."
+    
+    # Pull latest changes
+    cd /opt/$SERVICE_NAME
+    git pull origin main
+    
+    # Restart service
+    systemctl restart $SERVICE_NAME
+    
+    log "Service updated successfully!"
+}
 
-# Check if FastAPI is still running
-if pgrep -f "uvicorn.*app.main:app" > /dev/null; then
-    log "✅ FastAPI service is running"
-else
-    log "❌ FastAPI service is not running"
-    exit 1
-fi
+# Function to restart service
+restart_service() {
+    log "Restarting Hackathon Service..."
+    systemctl restart $SERVICE_NAME
+    log "Service restarted!"
+}
 
-# Check if ports are properly allocated
-if sudo lsof -i :80 | grep -q nginx; then
-    log "✅ Port 80 is allocated to Nginx"
-else
-    log "❌ Port 80 is not allocated to Nginx"
-    exit 1
-fi
+# Function to show status
+show_status() {
+    systemctl status $SERVICE_NAME --no-pager -l
+}
 
-if sudo lsof -i :443 | grep -q nginx; then
-    log "✅ Port 443 is allocated to Nginx"
-else
-    log "❌ Port 443 is not allocated to Nginx"
-    exit 1
-fi
+# Function to show logs
+show_logs() {
+    journalctl -u $SERVICE_NAME -f
+}
 
-if sudo lsof -i :8000 | grep -q uvicorn; then
-    log "✅ Port 8000 is allocated to FastAPI"
-else
-    log "❌ Port 8000 is not allocated to FastAPI"
-    exit 1
-fi
+# Function to create backup
+create_backup() {
+    /opt/$SERVICE_NAME/backup.sh
+}
 
-# Simple connectivity test
-log "🧪 Testing basic connectivity..."
-if curl -s -o /dev/null -w "%{http_code}" "http://localhost:80" | grep -q "301\|302"; then
-    log "✅ Local HTTP redirect working"
-else
-    log "❌ Local HTTP redirect failed"
-fi
+# Function to run monitoring
+run_monitoring() {
+    /opt/$SERVICE_NAME/monitor.sh
+}
 
-# Final port verification
-log "🔍 Final port verification..."
-check_port 80 "HTTP"
-check_port 443 "HTTPS"
-check_port 8000 "FastAPI"
-
-# Only declare success if all critical services are working
-log "🎯 All critical services verified successfully!"
-log "✅ Deployment completed successfully!"
-log "🌐 Your API is available at: https://$DOMAIN"
-log "📊 Service status: ./status-production-ssl.sh"
+# Main script logic
+case "${1:-deploy}" in
+    deploy)
+        deploy
+        ;;
+    update)
+        update_service
+        ;;
+    restart)
+        restart_service
+        ;;
+    status)
+        show_status
+        ;;
+    logs)
+        show_logs
+        ;;
+    backup)
+        create_backup
+        ;;
+    monitor)
+        run_monitoring
+        ;;
+    help|--help|-h)
+        usage
+        ;;
+    *)
+        error "Unknown option: $1"
+        usage
+        exit 1
+        ;;
+esac
