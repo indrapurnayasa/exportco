@@ -60,6 +60,7 @@ nano .env
 ```
 
 **Important: Update these values in .env:**
+
 ```env
 # Change these values:
 OPENAI_API_KEY=your-actual-openai-api-key
@@ -127,6 +128,7 @@ docker-compose logs api
 ## 🔧 **Docker Commands Reference**
 
 ### **Container Management**
+
 ```bash
 # Start services
 docker-compose up -d
@@ -146,6 +148,7 @@ docker-compose logs -f postgres
 ```
 
 ### **Database Operations**
+
 ```bash
 # Access PostgreSQL
 docker-compose exec postgres psql -U maverick -d hackathondb
@@ -161,6 +164,7 @@ docker-compose exec api alembic current
 ```
 
 ### **Application Operations**
+
 ```bash
 # Access API container shell
 docker-compose exec api bash
@@ -175,6 +179,7 @@ docker-compose restart api
 ## 🔄 **Updating Your Application**
 
 ### **Method 1: Rebuild and Deploy**
+
 ```bash
 # Pull latest changes (if using git)
 git pull origin main
@@ -187,6 +192,7 @@ docker-compose exec api alembic upgrade head
 ```
 
 ### **Method 2: Update Environment Variables**
+
 ```bash
 # Edit .env file
 nano .env
@@ -198,6 +204,7 @@ docker-compose restart
 ## 📊 **Monitoring and Maintenance**
 
 ### **Check System Resources**
+
 ```bash
 # Check container resource usage
 docker stats
@@ -210,6 +217,7 @@ docker-compose logs -f
 ```
 
 ### **Backup Database**
+
 ```bash
 # Create database backup
 docker-compose exec postgres pg_dump -U maverick hackathondb > backup_$(date +%Y%m%d_%H%M%S).sql
@@ -219,6 +227,7 @@ docker-compose exec -T postgres psql -U maverick hackathondb < backup_file.sql
 ```
 
 ### **Clean Up**
+
 ```bash
 # Remove unused containers and images
 docker system prune -a
@@ -230,6 +239,7 @@ docker volume prune
 ## 🆘 **Troubleshooting**
 
 ### **Container Won't Start**
+
 ```bash
 # Check logs
 docker-compose logs api
@@ -242,15 +252,17 @@ sudo systemctl restart docker
 ```
 
 ### **Database Connection Issues**
+
 ```bash
 # Check PostgreSQL logs
 docker-compose logs postgres
 
 # Test database connection
-docker-compose exec api python -c "import psycopg2; psycopg2.connect('postgresql://maverick:maverick1946@postgres:5432/hackathondb')"
+docker-compose exec api python -c "import psycopg2; psycopg2.connect('postgresql://maverick:Hackathon2025@postgres:5432/hackathondb')"
 ```
 
 ### **Permission Issues**
+
 ```bash
 # Fix file permissions
 sudo chown -R hackathon:hackathon ~/exportco
@@ -260,6 +272,7 @@ chmod 755 ~/exportco/logs ~/exportco/backups
 ## 🔒 **Security Considerations**
 
 ### **Firewall Setup**
+
 ```bash
 # Allow only necessary ports
 sudo ufw allow 22/tcp    # SSH
@@ -268,6 +281,7 @@ sudo ufw enable
 ```
 
 ### **Environment Variables**
+
 - Never commit `.env` file to git
 - Use strong passwords for database
 - Generate secure SECRET_KEY
@@ -309,8 +323,9 @@ git pull && docker-compose up --build -d
 **Your ExportCo service is now deployed with Docker! 🚀**
 
 **Benefits of Docker deployment:**
+
 - ✅ No need to install Python/PostgreSQL/Nginx on host
 - ✅ Consistent environment across deployments
 - ✅ Easy updates and rollbacks
 - ✅ Isolated services
-- ✅ Simple scaling 
+- ✅ Simple scaling

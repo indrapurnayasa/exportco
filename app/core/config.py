@@ -15,7 +15,7 @@ class Settings:
     API_V1_STR: str = "/api/v1"
     
     # Database settings
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://maverick:maverick1946@101.50.2.59:5432/hackathondb")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://maverick:Hackathon2025@101.50.2.59:5432/hackathondb")
     
     # Production database settings
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "20"))

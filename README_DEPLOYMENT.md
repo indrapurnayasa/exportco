@@ -5,26 +5,29 @@ Simple deployment guide for ExportCo API using Docker Compose.
 ## 🚀 **Quick Deployment**
 
 ### **Prerequisites**
+
 - Docker and Docker Compose installed
 - Existing PostgreSQL database (separate container or server)
 - GitHub repository access
 
 ### **Step 1: Create Deployment Directory**
+
 ```bash
 mkdir -p ~/exportco-deploy
 cd ~/exportco-deploy
 ```
 
 ### **Step 2: Create Environment File**
+
 ```bash
 cat > .env << 'EOF'
 # Database Configuration (point to your existing PostgreSQL)
 POSTGRES_DB=hackathondb
 POSTGRES_USER=maverick
-POSTGRES_PASSWORD=maverick1946
+POSTGRES_PASSWORD=Hackathon2025
 POSTGRES_HOST=your-postgres-container-name
 POSTGRES_PORT=5432
-DATABASE_URL=postgresql://maverick:maverick1946@your-postgres-container-name:5432/hackathondb
+DATABASE_URL=postgresql://maverick:Hackathon2025@your-postgres-container-name:5432/hackathondb
 
 # API Configuration
 PORT=8000
@@ -45,12 +48,14 @@ EOF
 ```
 
 ### **Step 3: Create Logs and Backups Directories**
+
 ```bash
 mkdir -p logs backups
 chmod 755 logs backups
 ```
 
 ### **Step 4: Deploy**
+
 ```bash
 # Build and start the API service
 docker-compose up -d --build
@@ -63,6 +68,7 @@ docker exec -it exportco_api alembic upgrade head
 ```
 
 ### **Step 5: Verify Deployment**
+
 ```bash
 # Test API
 curl http://localhost:8000/api/v1/
@@ -77,6 +83,7 @@ docker logs exportco_api
 ## 🔧 **Configuration**
 
 ### **Environment Variables**
+
 Update your `.env` file with your actual values:
 
 - `POSTGRES_HOST`: Your existing PostgreSQL container name or IP
@@ -85,7 +92,9 @@ Update your `.env` file with your actual values:
 - `OPENAI_API_KEY`: Your actual OpenAI API key
 
 ### **Network Configuration**
+
 If your PostgreSQL is in a different Docker network:
+
 ```bash
 # Connect to the same network as your PostgreSQL
 docker network connect your-postgres-network exportco_api
@@ -94,6 +103,7 @@ docker network connect your-postgres-network exportco_api
 ## 📊 **Management Commands**
 
 ### **Start/Stop**
+
 ```bash
 # Start services
 docker-compose up -d
@@ -106,6 +116,7 @@ docker-compose restart
 ```
 
 ### **Updates**
+
 ```bash
 # Pull latest code and rebuild
 docker-compose up -d --build
@@ -115,6 +126,7 @@ docker exec -it exportco_api alembic upgrade head
 ```
 
 ### **Monitoring**
+
 ```bash
 # View logs
 docker logs -f exportco_api
@@ -129,12 +141,13 @@ docker stats exportco_api
 ## 🆘 **Troubleshooting**
 
 ### **Database Connection Issues**
+
 ```bash
 # Test database connection
 docker exec -it exportco_api python -c "
 import psycopg2
 try:
-    conn = psycopg2.connect('postgresql://maverick:maverick1946@your-postgres-host:5432/hackathondb')
+    conn = psycopg2.connect('postgresql://maverick:Hackathon2025@your-postgres-host:5432/hackathondb')
     print('✅ Database connection successful')
     conn.close()
 except Exception as e:
@@ -143,6 +156,7 @@ except Exception as e:
 ```
 
 ### **Port Conflicts**
+
 ```bash
 # Check what's using port 8000
 sudo netstat -tlnp | grep :8000
@@ -152,6 +166,7 @@ PORT=8001
 ```
 
 ### **Build Issues**
+
 ```bash
 # Rebuild without cache
 docker-compose build --no-cache
@@ -174,11 +189,11 @@ docker-compose logs api
 
 **Service URL**: http://localhost:8000  
 **Documentation**: http://localhost:8000/docs  
-**Health Check**: http://localhost:8000/health  
+**Health Check**: http://localhost:8000/health
 
 **Container Name**: `exportco_api`  
 **Network**: `exportco-deploy_app-network`
 
 ---
 
-**Your ExportCo API is now deployed and ready! 🚀** 
+**Your ExportCo API is now deployed and ready! 🚀**

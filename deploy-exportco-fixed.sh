@@ -11,10 +11,10 @@ cat > .env << 'EOF'
 # Database Configuration (Updated for your PostgreSQL container)
 POSTGRES_DB=hackathondb
 POSTGRES_USER=maverick
-POSTGRES_PASSWORD=1946@Maverick
+POSTGRES_PASSWORD=Hackathon2025
 POSTGRES_HOST=hackathon-bi
 POSTGRES_PORT=5432
-DATABASE_URL=postgresql://maverick:1946@Maverick@hackathon-bi:5432/hackathondb
+DATABASE_URL=postgresql://maverick:Hackathon2025@hackathon-bi:5432/hackathondb
 
 # API Configuration
 PORT=8000
@@ -67,7 +67,7 @@ echo "🧪 Testing database connection..."
 docker exec -it exportco_api python -c "
 import psycopg2
 try:
-    conn = psycopg2.connect('postgresql://maverick:1946@Maverick@hackathon-bi:5432/hackathondb')
+    conn = psycopg2.connect('postgresql://maverick:Hackathon2025@hackathon-bi:5432/hackathondb')
     print('✅ Database connection successful')
     conn.close()
 except Exception as e:

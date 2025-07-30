@@ -76,6 +76,7 @@ su - hackathon
 ### 3.1 Method A: Personal Access Token (Recommended)
 
 #### Create Personal Access Token on GitHub:
+
 1. Go to GitHub.com → Settings → Developer settings → Personal access tokens
 2. Click "Generate new token (classic)"
 3. Give it a name: "VPS Deployment"
@@ -86,6 +87,7 @@ su - hackathon
 6. **Copy the token** (you won't see it again!)
 
 #### Configure on VPS:
+
 ```bash
 # Upload the setup script to VPS
 # (You'll need to copy the github-setup.sh file to your VPS)
@@ -136,6 +138,7 @@ chmod +x setup.sh
 ```
 
 This script will:
+
 - Update system packages
 - Install required dependencies (Python, PostgreSQL, Nginx, etc.)
 - Configure firewall and security
@@ -204,7 +207,7 @@ sudo systemctl enable postgresql
 # Create database and user
 sudo -u postgres psql << EOF
 CREATE DATABASE hackathondb;
-CREATE USER maverick WITH PASSWORD 'maverick1946';
+CREATE USER maverick WITH PASSWORD 'Hackathon2025';
 GRANT ALL PRIVILEGES ON DATABASE hackathondb TO maverick;
 ALTER USER maverick CREATEDB;
 \q
@@ -240,10 +243,10 @@ OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 # PostgreSQL Database Configuration
 POSTGRES_DB=hackathondb
 POSTGRES_USER=maverick
-POSTGRES_PASSWORD=maverick1946
+POSTGRES_PASSWORD=Hackathon2025
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-DATABASE_URL=postgresql://maverick:maverick1946@localhost:5432/hackathondb
+DATABASE_URL=postgresql://maverick:Hackathon2025@localhost:5432/hackathondb
 
 # Security Configuration
 SECRET_KEY=$(openssl rand -hex 32)
@@ -542,6 +545,7 @@ curl http://101.50.2.59/api/v1/export/country-demand
 ### 11.2 Test Documentation
 
 Open in your browser:
+
 - **API Documentation**: http://101.50.2.59/docs
 - **ReDoc**: http://101.50.2.59/redoc
 
@@ -599,6 +603,7 @@ sudo systemctl restart exportco
 ### Common Issues and Solutions
 
 #### 1. Service Won't Start
+
 ```bash
 # Check service status
 sudo systemctl status exportco
@@ -611,6 +616,7 @@ sudo netstat -tlnp | grep :8000
 ```
 
 #### 2. Database Connection Issues
+
 ```bash
 # Check PostgreSQL status
 sudo systemctl status postgresql
@@ -623,6 +629,7 @@ sudo tail -f /var/log/postgresql/postgresql-*.log
 ```
 
 #### 3. Nginx Issues
+
 ```bash
 # Check Nginx configuration
 sudo nginx -t
@@ -635,6 +642,7 @@ sudo systemctl status nginx
 ```
 
 #### 4. Permission Issues
+
 ```bash
 # Fix file permissions
 sudo chown -R hackathon:hackathon /opt/exportco
@@ -704,4 +712,4 @@ htop
 
 ---
 
-**Congratulations! Your Hackathon Service is now live and ready to serve requests! 🚀** 
+**Congratulations! Your Hackathon Service is now live and ready to serve requests! 🚀**

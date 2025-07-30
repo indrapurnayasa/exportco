@@ -60,23 +60,27 @@ exportco/
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone <repository-url>
 cd exportco
 ```
 
 2. Create a virtual environment:
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 3. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 4. Create a `.env` file with your configuration:
+
 ```env
 # API Configuration
 PROJECT_NAME=Hackathon Service API
@@ -99,7 +103,7 @@ OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 # PostgreSQL Database Configuration
 POSTGRES_DB=hackathondb
 POSTGRES_USER=maverick
-POSTGRES_PASSWORD=maverick1946
+POSTGRES_PASSWORD=Hackathon2025
 POSTGRES_HOST=101.50.2.59
 POSTGRES_PORT=5432
 
@@ -115,11 +119,13 @@ LOG_LEVEL=INFO
 ## Running the Application
 
 ### Development Server
+
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Production Server
+
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
@@ -135,11 +141,13 @@ Once the server is running, you can access:
 ## Available Endpoints
 
 ### Authentication
+
 - `POST /api/v1/auth/login` - User login
 - `POST /api/v1/auth/register` - User registration
 - `GET /api/v1/auth/me` - Get current user info
 
 ### Users
+
 - `GET /api/v1/users/` - Get all users
 - `GET /api/v1/users/{user_id}` - Get specific user
 - `POST /api/v1/users/` - Create new user
@@ -147,6 +155,7 @@ Once the server is running, you can access:
 - `DELETE /api/v1/users/{user_id}` - Delete user
 
 ### Export Data
+
 - `GET /api/v1/export/seasonal-trend` - Get seasonal trend data for commodities
 - `GET /api/v1/export/country-demand` - Get all commodities for top 20 countries with growth calculations (ranked by total transaction value)
   - Response Format:
@@ -157,7 +166,7 @@ Once the server is running, you can access:
           "countryId": "JP",
           "countryName": "Japan",
           "growthPercentage": 15.5,
-          "currentTotalTransaction": 1500000.00,
+          "currentTotalTransaction": 1500000.0,
           "products": [
             {
               "id": "CPO",
@@ -183,11 +192,13 @@ Once the server is running, you can access:
 ## Testing
 
 Run the test suite:
+
 ```bash
 pytest
 ```
 
 Run tests with coverage:
+
 ```bash
 pytest --cov=app
 ```
@@ -201,16 +212,19 @@ The application uses SQLAlchemy ORM with PostgreSQL. Make sure your PostgreSQL s
 If you want to use Alembic for database migrations:
 
 1. Initialize Alembic:
+
 ```bash
 alembic init alembic
 ```
 
 2. Create a migration:
+
 ```bash
 alembic revision --autogenerate -m "Initial migration"
 ```
 
 3. Apply migrations:
+
 ```bash
 alembic upgrade head
 ```
@@ -226,4 +240,4 @@ alembic upgrade head
 
 ## License
 
-This project is licensed under the MIT License. 
+This project is licensed under the MIT License.

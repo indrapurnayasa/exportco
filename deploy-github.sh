@@ -68,7 +68,7 @@ sudo systemctl enable postgresql
 # Create database and user
 sudo -u postgres psql << EOF
 CREATE DATABASE hackathondb;
-CREATE USER maverick WITH PASSWORD 'maverick1946';
+CREATE USER maverick WITH PASSWORD 'Hackathon2025';
 GRANT ALL PRIVILEGES ON DATABASE hackathondb TO maverick;
 ALTER USER maverick CREATEDB;
 \q
@@ -98,10 +98,10 @@ OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 # PostgreSQL Database Configuration
 POSTGRES_DB=hackathondb
 POSTGRES_USER=maverick
-POSTGRES_PASSWORD=maverick1946
+POSTGRES_PASSWORD=Hackathon2025
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-DATABASE_URL=postgresql://maverick:maverick1946@localhost:5432/hackathondb
+DATABASE_URL=postgresql://maverick:Hackathon2025@localhost:5432/hackathondb
 
 # Security Configuration
 SECRET_KEY=$(openssl rand -hex 32)

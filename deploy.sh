@@ -16,7 +16,6 @@ echo "🔧 Installing system dependencies..."
 sudo apt install -y \
     python3 \
     python3-pip \
-    python3-venv \
     postgresql \
     postgresql-contrib \
     nginx \
@@ -27,6 +26,22 @@ sudo apt install -y \
     build-essential \
     libpq-dev \
     python3-dev
+
+# Ensure conda is available and environment exists
+echo "🐍 Checking conda environment..."
+if ! command -v conda &> /dev/null; then
+    echo "❌ Conda not found. Please install miniconda first."
+    exit 1
+fi
+
+# Initialize conda for this session
+source ~/miniconda3/etc/profile.d/conda.sh
+
+# Check if hackathon-env exists, create if not
+if ! conda env list | grep -q "hackathon-env"; then
+    echo "📦 Creating hackathon-env conda environment..."
+    conda create -n hackathon-env python=3.11 -y
+fi
 
 # Create application directory
 echo "📁 Setting up application directory..."
@@ -39,10 +54,10 @@ echo "📋 Copying application files..."
 # If you have the files locally, you can copy them here
 # cp -r /path/to/your/exportco/* /opt/exportco/
 
-# Create virtual environment
-echo "🐍 Setting up Python virtual environment..."
-python3 -m venv venv
-source venv/bin/activate
+# Activate conda environment
+echo "🐍 Activating conda environment..."
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate hackathon-env
 
 # Install Python dependencies
 echo "📚 Installing Python dependencies..."
@@ -57,7 +72,7 @@ sudo systemctl enable postgresql
 # Create database and user
 sudo -u postgres psql << EOF
 CREATE DATABASE hackathondb;
-CREATE USER maverick WITH PASSWORD 'maverick1946';
+CREATE USER maverick WITH PASSWORD 'Hackathon2025';
 GRANT ALL PRIVILEGES ON DATABASE hackathondb TO maverick;
 ALTER USER maverick CREATEDB;
 \q
@@ -87,10 +102,10 @@ OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 # PostgreSQL Database Configuration
 POSTGRES_DB=hackathondb
 POSTGRES_USER=maverick
-POSTGRES_PASSWORD=maverick1946
+POSTGRES_PASSWORD=Hackathon2025
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-DATABASE_URL=postgresql://maverick:maverick1946@localhost:5432/hackathondb
+DATABASE_URL=postgresql://maverick:Hackathon2025@localhost:5432/hackathondb
 
 # Security Configuration
 SECRET_KEY=$(openssl rand -hex 32)
@@ -115,7 +130,8 @@ EOF
 
 # Run database migrations
 echo "🔄 Running database migrations..."
-source venv/bin/activate
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate hackathon-env
 alembic upgrade head
 
 # Create systemd service file
@@ -130,8 +146,8 @@ Type=exec
 User=$USER
 Group=$USER
 WorkingDirectory=/opt/exportco
-Environment=PATH=/opt/exportco/venv/bin
-ExecStart=/opt/exportco/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Environment=PATH=/home/$USER/miniconda3/envs/hackathon-env/bin
+ExecStart=/home/$USER/miniconda3/envs/hackathon-env/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10
 
