@@ -156,4 +156,18 @@ class UserService:
             return None
         if not verify_password(password, user.hashed_password):
             return None
-        return user 
+        
+        # Update last_access on successful authentication
+        self.update_last_access(user.id)
+        return user
+    
+    def update_last_access(self, user_id: int) -> bool:
+        """Update the last_access timestamp for a user"""
+        from datetime import datetime
+        user = self.get_user(user_id)
+        if not user:
+            return False
+        
+        user.last_access = datetime.utcnow()
+        self.db.commit()
+        return True 

@@ -9,7 +9,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://maverick:1946%40Maverick@hackathon-bi:5432/hackathondb
+      - DATABASE_URL=postgresql://maverick:Hackathon2025@hackathon-bi:5432/hackathondb
       - POSTGRES_DB=hackathondb
       - POSTGRES_USER=maverick
       - POSTGRES_PASSWORD=Hackathon2025

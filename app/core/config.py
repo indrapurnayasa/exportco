@@ -14,8 +14,15 @@ class Settings:
     DESCRIPTION: str = "API for Hackathon Service"
     API_V1_STR: str = "/api/v1"
     
-    # Database settings
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://maverick:Hackathon2025@101.50.2.59:5432/hackathondb")
+    # Database settings - use environment variables
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "hackathondb")
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "maverick")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "Hackathon2025")
+    POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
+    
+    # Construct DATABASE_URL from components
+    DATABASE_URL: str = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
     
     # Production database settings
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "20"))
@@ -39,9 +46,9 @@ class Settings:
     CACHE_TTL: int = int(os.getenv("CACHE_TTL", "300"))  # 5 minutes
     CACHE_MAX_SIZE: int = int(os.getenv("CACHE_MAX_SIZE", "1000"))
     
-    # Query limits for production
-    MAX_QUERY_LIMIT: int = int(os.getenv("MAX_QUERY_LIMIT", "10000"))
-    QUERY_TIMEOUT: int = int(os.getenv("QUERY_TIMEOUT", "30"))
+    # Query limits for production - OPTIMIZED FOR VERCEL
+    MAX_QUERY_LIMIT: int = int(os.getenv("MAX_QUERY_LIMIT", "1000"))  # Reduced from 10000
+    QUERY_TIMEOUT: int = int(os.getenv("QUERY_TIMEOUT", "8"))  # Reduced from 30 to 8 seconds for Vercel
     
     # Logging settings
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
