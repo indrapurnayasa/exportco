@@ -553,6 +553,71 @@ sleep 10
     log "4. Configure environment variables in .env file"
 }
 
+# Function to kill ports
+kill_ports() {
+    log "Killing processes on ports 80, 443, 8000..."
+    
+    # Kill processes on specific ports
+    sudo fuser -k 80/tcp 2>/dev/null || true
+    sudo fuser -k 443/tcp 2>/dev/null || true
+    sudo fuser -k 8000/tcp 2>/dev/null || true
+    
+    log "Ports cleared"
+}
+
+# Function to restart nginx
+restart_nginx() {
+    log "Restarting nginx..."
+    
+    # Test nginx configuration
+    sudo nginx -t
+    
+    # Restart nginx
+    sudo systemctl restart nginx
+    sudo systemctl status nginx --no-pager -l
+}
+
+# Function to check database
+check_database() {
+    log "Checking database connection..."
+    
+    # Check if PostgreSQL is running
+    if systemctl is-active --quiet postgresql; then
+        log "✅ PostgreSQL is running"
+    else
+        log "❌ PostgreSQL is not running, starting..."
+        sudo systemctl start postgresql
+    fi
+    
+    # Test database connection
+    if PGPASSWORD=Hackathon2025 psql -h localhost -U maverick -d hackathondb -c "SELECT 1;" 2>/dev/null; then
+        log "✅ Database connection successful"
+    else
+        log "❌ Database connection failed"
+        log "Attempting to fix database..."
+        setup_postgresql
+    fi
+}
+
+# Function to start service
+start_service() {
+    log "Starting hackathon service..."
+    
+    # Start the service
+    sudo systemctl start hackathon-service
+    
+    # Wait for service to start
+    sleep 10
+    
+    # Check service status
+    if systemctl is-active --quiet hackathon-service; then
+        log "✅ Service started successfully!"
+    else
+        log "❌ Service failed to start"
+        sudo systemctl status hackathon-service --no-pager -l
+    fi
+}
+
 # Function to show usage
 usage() {
     echo "Usage: $0 [OPTION]"
@@ -565,6 +630,11 @@ usage() {
     echo "  logs        Show service logs"
     echo "  backup      Create backup"
     echo "  monitor     Run monitoring script"
+    echo "  kill-ports  Kill processes on ports 80, 443, 8000"
+    echo "  restart-nginx Restart nginx service"
+    echo "  check-db    Check database connection"
+    echo "  start       Start hackathon service"
+    echo "  full-restart Kill ports, restart nginx, check db, start service"
     echo "  help        Show this help message"
     echo ""
 }
@@ -635,6 +705,26 @@ case "${1:-deploy}" in
         ;;
     monitor)
         run_monitoring
+        ;;
+    kill-ports)
+        kill_ports
+        ;;
+    restart-nginx)
+        restart_nginx
+        ;;
+    check-db)
+        check_database
+        ;;
+    start)
+        start_service
+        ;;
+    full-restart)
+        log "Performing full restart..."
+        kill_ports
+        restart_nginx
+        check_database
+        start_service
+        log "Full restart completed!"
         ;;
     help|--help|-h)
         usage
