@@ -57,7 +57,7 @@ install_dependencies() {
     log "Installing system dependencies..."
     
     # Install Python and pip
-    apt-get install -y python3 python3-pip python3-venv
+    apt-get install -y python3 python3-pip
     
     # Install nginx
     apt-get install -y nginx
@@ -65,8 +65,27 @@ install_dependencies() {
     # Install additional tools
     apt-get install -y curl wget git unzip
     
-    # Install uvicorn for FastAPI
-    pip3 install uvicorn[standard]
+    # Install Miniconda if not present
+    if ! command -v conda &> /dev/null; then
+        log "Installing Miniconda..."
+        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh
+        bash /tmp/miniconda.sh -b -p /opt/miniconda3
+        rm /tmp/miniconda.sh
+        
+        # Add conda to PATH for all users
+        echo 'export PATH="/opt/miniconda3/bin:$PATH"' >> /etc/profile
+        echo 'export PATH="/opt/miniconda3/bin:$PATH"' >> /etc/bash.bashrc
+        
+        # Source the profile
+        source /etc/profile
+    fi
+    
+    # Create conda environment
+    log "Creating conda environment..."
+    /opt/miniconda3/bin/conda create -n hackathon-env python=3.10 -y
+    
+    # Install uvicorn in the conda environment
+    /opt/miniconda3/bin/conda activate hackathon-env && pip install uvicorn[standard]
 }
 
 # Create application directory and user
@@ -90,10 +109,10 @@ setup_application() {
     mkdir -p /opt/$SERVICE_NAME/logs /opt/$SERVICE_NAME/backups
     chown -R $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/logs /opt/$SERVICE_NAME/backups
     
-    # Install Python dependencies
-    log "Installing Python dependencies..."
+    # Install Python dependencies in conda environment
+    log "Installing Python dependencies in conda environment..."
     cd /opt/$SERVICE_NAME
-    pip3 install -r requirements.txt
+    /opt/miniconda3/bin/conda run -n hackathon-env pip install -r requirements.txt
 }
 
 # Create systemd service file
@@ -108,13 +127,14 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/$SERVICE_NAME
-ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+ExecStart=/opt/miniconda3/bin/conda run -n hackathon-env uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 User=$SERVICE_NAME
 Group=$SERVICE_NAME
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
+Environment=PATH=/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=multi-user.target
@@ -298,7 +318,7 @@ echo ""
 
 # Check Python processes
 echo "Python/Uvicorn Processes:"
-ps aux | grep -E "(uvicorn|python.*app.main)" | grep -v grep
+ps aux | grep -E "(uvicorn|conda.*hackathon-env)" | grep -v grep
 echo ""
 
 # Check nginx status
@@ -424,8 +444,8 @@ update_service() {
     cd /opt/$SERVICE_NAME
     git pull origin main
     
-    # Install/update Python dependencies
-    pip3 install -r requirements.txt
+    # Install/update Python dependencies in conda environment
+    /opt/miniconda3/bin/conda run -n hackathon-env pip install -r requirements.txt
     
     # Restart service
     systemctl restart $SERVICE_NAME

@@ -84,8 +84,9 @@ sudo ./deploy.sh monitor
 
 ### 1. System Setup
 - Updates system packages
-- Installs Python 3, pip, and virtual environments
-- Installs uvicorn for FastAPI
+- Installs Python 3, pip, and Miniconda
+- Creates conda environment (hackathon-env)
+- Installs uvicorn for FastAPI in conda environment
 - Installs nginx web server
 - Installs additional tools (curl, wget, git, unzip)
 
@@ -96,7 +97,7 @@ sudo ./deploy.sh monitor
 - Creates logs and backups directories
 
 ### 3. Service Configuration
-- Creates systemd service file for auto-start (runs uvicorn directly)
+- Creates systemd service file for auto-start (runs uvicorn in conda environment)
 - Configures nginx as reverse proxy
 - Sets up firewall rules (SSH, HTTP, HTTPS)
 - Creates backup and monitoring scripts
@@ -182,8 +183,11 @@ sudo systemctl status hackathon-service
 # View detailed logs
 sudo journalctl -u hackathon-service -f
 
-# Check Python processes
-ps aux | grep -E "(uvicorn|python.*app.main)" | grep -v grep
+# Check conda environment and Python processes
+ps aux | grep -E "(uvicorn|conda.*hackathon-env)" | grep -v grep
+
+# Test conda environment manually
+/opt/miniconda3/bin/conda run -n hackathon-env uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### Nginx Issues
