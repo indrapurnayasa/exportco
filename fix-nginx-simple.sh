@@ -1,106 +1,90 @@
 #!/bin/bash
 
-echo "=========================================="
-echo "🔧 SIMPLE NGINX FIX"
-echo "=========================================="
+echo "=== Fixing Nginx Configuration (Simple) ==="
 
-# Function to log with timestamp
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+# 1. Remove problematic files
+echo "Removing problematic nginx files..."
+sudo rm -f /etc/nginx/sites-enabled/hackathon-service.backup
+sudo rm -f /etc/nginx/sites-enabled/hackathon-service
+
+# 2. Create clean nginx configuration
+echo "Creating clean nginx configuration..."
+sudo tee /etc/nginx/sites-enabled/hackathon-service > /dev/null << 'EOF'
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
 }
 
-DOMAIN="dev-ngurah.fun"
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+    
+    # SSL Configuration (you'll need to add your SSL certificates)
+    # ssl_certificate /path/to/your/certificate.crt;
+    # ssl_certificate_key /path/to/your/private.key;
+    
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+    add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied expired no-cache no-store private auth;
+    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/javascript;
+    
+    # Client max body size
+    client_max_body_size 100M;
+    
+    # Proxy settings
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+    
+    # Health check endpoint
+    location /health {
+        proxy_pass http://localhost:8000/health;
+        access_log off;
+    }
+    
+    # Static files (if any)
+    location /static/ {
+        alias /opt/hackathon-service/static/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+EOF
 
-log "🔍 Starting simple Nginx fix..."
-
-# Step 1: Stop everything first
-log "🛑 Step 1: Stopping all services..."
-sudo systemctl stop nginx 2>/dev/null || true
-pkill -f "uvicorn.*app.main:app" 2>/dev/null || true
-sleep 2
-
-# Step 2: Check what's using ports
-log "🔍 Step 2: Checking port usage..."
-echo "Port 80:"
-sudo lsof -i :80 2>/dev/null || echo "Port 80 is free"
-echo "Port 443:"
-sudo lsof -i :443 2>/dev/null || echo "Port 443 is free"
-echo "Port 8000:"
-sudo lsof -i :8000 2>/dev/null || echo "Port 8000 is free"
-
-# Step 3: Check Nginx configuration
-log "🔧 Step 3: Testing Nginx configuration..."
+# 3. Test nginx configuration
+echo "Testing nginx configuration..."
 sudo nginx -t
-if [ $? -ne 0 ]; then
-    log "❌ Nginx configuration has errors"
-    log "📋 Nginx configuration test output:"
-    sudo nginx -t 2>&1
-    exit 1
+
+# 4. If test passes, restart nginx
+if [ $? -eq 0 ]; then
+    echo "✅ Nginx configuration is valid"
+    sudo systemctl restart nginx
+    sudo systemctl status nginx
 else
-    log "✅ Nginx configuration is valid"
+    echo "❌ Nginx configuration still has errors"
+    echo "Check the configuration manually"
 fi
 
-# Step 4: Check SSL certificate files
-log "🔐 Step 4: Checking SSL certificates..."
-CERT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-KEY_PATH="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
-
-if [ -f "$CERT_PATH" ] && [ -f "$KEY_PATH" ]; then
-    log "✅ SSL certificate files exist"
-    ls -la "$CERT_PATH"
-    ls -la "$KEY_PATH"
-else
-    log "❌ SSL certificate files missing"
-    log "🔧 Regenerating SSL certificate..."
-    sudo certbot certonly --standalone -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos --email admin@$DOMAIN
-fi
-
-# Step 5: Fix permissions
-log "🔧 Step 5: Fixing permissions..."
-sudo chmod 644 "$CERT_PATH" 2>/dev/null || true
-sudo chmod 600 "$KEY_PATH" 2>/dev/null || true
-sudo chown root:root "$CERT_PATH" "$KEY_PATH" 2>/dev/null || true
-
-# Step 6: Start Nginx
-log "🚀 Step 6: Starting Nginx..."
-sudo systemctl start nginx
-sleep 3
-
-# Step 7: Check if Nginx started
-log "🔍 Step 7: Checking Nginx status..."
-if sudo systemctl is-active --quiet nginx; then
-    log "✅ Nginx is running"
-    sudo systemctl status nginx --no-pager -l
-else
-    log "❌ Nginx failed to start"
-    log "📋 Nginx error logs:"
-    sudo journalctl -u nginx --no-pager -n 10
-    log "📋 Nginx error log file:"
-    sudo tail -n 10 /var/log/nginx/error.log 2>/dev/null || echo "No error log found"
-    exit 1
-fi
-
-# Step 8: Check if Nginx is listening
-log "🔍 Step 8: Checking if Nginx is listening..."
-if sudo lsof -i :80 | grep -q nginx; then
-    log "✅ Nginx is listening on port 80"
-else
-    log "❌ Nginx is not listening on port 80"
-fi
-
-if sudo lsof -i :443 | grep -q nginx; then
-    log "✅ Nginx is listening on port 443"
-else
-    log "❌ Nginx is not listening on port 443"
-fi
-
-# Step 9: Test connections
-log "🧪 Step 9: Testing connections..."
-echo "Testing HTTP (should redirect to HTTPS):"
-curl -I "http://$DOMAIN" 2>/dev/null | head -3 || echo "HTTP connection failed"
-
-echo "Testing HTTPS:"
-curl -I "https://$DOMAIN" 2>/dev/null | head -3 || echo "HTTPS connection failed"
-
-log "✅ Nginx fix completed!"
-log "💡 If Nginx is still not working, check the logs above for specific errors."
+echo "Nginx configuration fix completed!"
