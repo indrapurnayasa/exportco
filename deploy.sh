@@ -171,7 +171,7 @@ DATABASE_URL=postgresql://maverick:Hackathon2025@localhost:5432/hackathondb
 POSTGRES_DB=hackathondb
 POSTGRES_USER=maverick
 POSTGRES_PASSWORD=Hackathon2025
-POSTGRES_HOST=101.50.2.59
+POSTGRES_HOST=103.197.191.88
 POSTGRES_PORT=5432
 
 # API Configuration
