@@ -102,9 +102,9 @@ OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 
 # PostgreSQL Database Configuration
 POSTGRES_DB=hackathondb
-POSTGRES_USER=maverick
-POSTGRES_PASSWORD=Hackathon2025
-POSTGRES_HOST=101.50.2.59
+POSTGRES_USER=your-database-user
+POSTGRES_PASSWORD=your-database-password
+POSTGRES_HOST=your-database-host
 POSTGRES_PORT=5432
 
 # Security Configuration

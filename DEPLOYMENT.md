@@ -81,8 +81,8 @@ The deployment script creates a `.env` file with the following variables:
 ```env
 # Database settings
 POSTGRES_DB=hackathondb
-POSTGRES_USER=maverick
-POSTGRES_PASSWORD=Hackathon2025
+POSTGRES_USER=your-database-user
+POSTGRES_PASSWORD=your-database-password
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 

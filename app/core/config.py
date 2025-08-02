@@ -17,7 +17,7 @@ class Settings:
     # Database settings - use environment variables
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "hackathondb")
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "maverick")
-    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "Hackathon2025")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "")
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
     POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
     
@@ -34,7 +34,7 @@ class Settings:
     ALLOWED_HOSTS: List[str] = ["*"]
     
     # Security settings
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
