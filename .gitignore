@@ -154,3 +154,12 @@ Icon?
 debug_*.py
 test_*.py
 example_*.py
+
+# Deployment files
+deploy.config
+deploy.sh
+update.sh
+
+# Vercel deployment files (keep locally but don't track)
+vercel.json
+vercel-frontend-ssl.js
