@@ -1,6 +1,6 @@
-# Hackathon Service API
+# Exportin Service API
 
-A FastAPI-based service for hackathon management with user authentication, project management, and team collaboration features.
+A FastAPI-based service for export data analysis with user authentication, export management, and AI-powered insights.
 
 ## Features
 
@@ -16,7 +16,7 @@ A FastAPI-based service for hackathon management with user authentication, proje
 ## Project Structure
 
 ```
-hackathon-service/
+exportin-service/
 ├── app/                          # Main application package
 │   ├── __init__.py
 │   ├── main.py                   # FastAPI app instance and configuration
@@ -103,7 +103,7 @@ hackathon-service/
 
 ```bash
 git clone <repository-url>
-cd hackathon-service
+cd exportin-service
 ```
 
 2. Create a virtual environment:
@@ -129,7 +129,7 @@ Then edit the `.env` file with your actual values:
 
 ```env
 # API Configuration
-PROJECT_NAME=Hackathon Service API
+PROJECT_NAME=Exportin Service API
 VERSION=1.0.0
 DESCRIPTION=A FastAPI service for export data analysis
 API_V1_STR=/api/v1
@@ -147,7 +147,7 @@ OPENAI_API_KEY=your-openai-api-key-here
 OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 
 # PostgreSQL Database Configuration
-POSTGRES_DB=hackathondb
+POSTGRES_DB=exportindb
 POSTGRES_USER=your-database-user
 POSTGRES_PASSWORD=your-database-password
 POSTGRES_HOST=your-database-host
