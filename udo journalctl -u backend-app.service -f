@@ -1,0 +1,20 @@
+Jul 30 14:19:02 purnayasa.xyz systemd[1]: backend-app.service: Scheduled restart job, restart counter is at 4.
+Jul 30 14:19:02 purnayasa.xyz systemd[1]: Started backend-app.service - FastAPI Backend App.
+Jul 30 14:19:02 purnayasa.xyz python3[961610]: /usr/bin/python3: No module named uvicorn
+Jul 30 14:19:02 purnayasa.xyz systemd[1]: [0;1;39m[0;1;31m[0;1;39mbackend-app.service: Main process exited, code=exited, status=1/FAILURE[0m
+Jul 30 14:19:02 purnayasa.xyz systemd[1]: [0;1;38;5;185m[0;1;39m[0;1;38;5;185mbackend-app.service: Failed with result 'exit-code'.[0m
+Jul 30 14:19:13 purnayasa.xyz systemd[1]: backend-app.service: Scheduled restart job, restart counter is at 5.
+Jul 30 14:19:13 purnayasa.xyz systemd[1]: Started backend-app.service - FastAPI Backend App.
+Jul 30 14:19:13 purnayasa.xyz python3[961616]: /usr/bin/python3: No module named uvicorn
+Jul 30 14:19:13 purnayasa.xyz systemd[1]: [0;1;39m[0;1;31m[0;1;39mbackend-app.service: Main process exited, code=exited, status=1/FAILURE[0m
+Jul 30 14:19:13 purnayasa.xyz systemd[1]: [0;1;38;5;185m[0;1;39m[0;1;38;5;185mbackend-app.service: Failed with result 'exit-code'.[0m
+Jul 30 14:19:23 purnayasa.xyz systemd[1]: backend-app.service: Scheduled restart job, restart counter is at 6.
+Jul 30 14:19:23 purnayasa.xyz systemd[1]: Started backend-app.service - FastAPI Backend App.
+Jul 30 14:19:23 purnayasa.xyz python3[961622]: /usr/bin/python3: No module named uvicorn
+Jul 30 14:19:23 purnayasa.xyz systemd[1]: [0;1;39m[0;1;31m[0;1;39mbackend-app.service: Main process exited, code=exited, status=1/FAILURE[0m
+Jul 30 14:19:23 purnayasa.xyz systemd[1]: [0;1;38;5;185m[0;1;39m[0;1;38;5;185mbackend-app.service: Failed with result 'exit-code'.[0m
+Jul 30 14:19:33 purnayasa.xyz systemd[1]: backend-app.service: Scheduled restart job, restart counter is at 7.
+Jul 30 14:19:33 purnayasa.xyz systemd[1]: Started backend-app.service - FastAPI Backend App.
+Jul 30 14:19:33 purnayasa.xyz python3[961628]: /usr/bin/python3: No module named uvicorn
+Jul 30 14:19:33 purnayasa.xyz systemd[1]: [0;1;39m[0;1;31m[0;1;39mbackend-app.service: Main process exited, code=exited, status=1/FAILURE[0m
+Jul 30 14:19:33 purnayasa.xyz systemd[1]: [0;1;38;5;185m[0;1;39m[0;1;38;5;185mbackend-app.service: Failed with result 'exit-code'.[0m
