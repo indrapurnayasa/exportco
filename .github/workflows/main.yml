@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
   deploy:
@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
@@ -44,12 +44,12 @@ jobs:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@master
         with:
-          host: 101.50.2.59
+          host: 103.197.191.88
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /opt/exportco
-            
+
             # Create or update .env file
             cat > .env << 'EOL'
             SECRET_KEY=${{ secrets.SECRET_KEY }}
@@ -68,21 +68,21 @@ jobs:
             QUERY_TIMEOUT=30
             LOG_LEVEL=INFO
             EOL
-            
+
             # Pull latest image
             docker pull ${{ secrets.DOCKER_USERNAME }}/exportco:latest
-            
+
             # Stop existing container
             docker-compose down
-            
+
             # Start new container
             docker-compose up -d
-            
+
             # Clean up old images
             docker image prune -f
-            
+
             # Check container status
             docker ps
-            
+
             # Show logs
-            docker-compose logs --tail=100 
+            docker-compose logs --tail=100
