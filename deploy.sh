@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Hackathon Service Deployment Script
-# This script sets up the FastAPI service with nginx auto-start
+# Hackathon Service VPS Deployment Script
+# This script deploys the FastAPI application on a VPS with HTTPS support
+# and automatic restart capabilities
 
 set -e  # Exit on any error
 
@@ -12,254 +13,275 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
-SERVICE_NAME="hackathon-service"
-NGINX_SITE_NAME="hackathon-service"
-DOMAIN_NAME="dev-ngurah.fun"  # Change this to your actual domain
-APP_PORT=8000
-NGINX_PORT=80
+# Load configuration
+if [ -f "deploy.config" ]; then
+    source deploy.config
+else
+    print_error "deploy.config file not found. Please create it first."
+    exit 1
+fi
+
+# Default values if not set in config
+APP_NAME=${APP_NAME:-"hackathon-service"}
+APP_DIR=${APP_DIR:-"/opt/$APP_NAME"}
+SERVICE_NAME="${APP_NAME}.service"
+DOMAIN_NAME=${DOMAIN_NAME:-""}
+EMAIL=${EMAIL:-""}
+PORT=${PORT:-8000}
 SSL_PORT=443
+UVICORN_WORKERS=${UVICORN_WORKERS:-4}
+CONDA_ENV_NAME=${CONDA_ENV_NAME:-"hackathon-env"}
 
-# Logging function
-log() {
-    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] $1${NC}"
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
 }
 
-error() {
-    echo -e "${RED}[ERROR] $1${NC}"
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to check if command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to check system requirements
+check_system_requirements() {
+    print_status "Checking system requirements..."
+    
+    # Check if running as root
+    if [[ $EUID -eq 0 ]]; then
+        print_error "This script should not be run as root. Please run as a regular user with sudo privileges."
         exit 1
+    fi
+    
+    # Check if sudo is available
+    if ! command_exists sudo; then
+        print_error "sudo is not installed. Please install sudo first."
+        exit 1
+    fi
+    
+    # Check OS
+    if [[ "$OSTYPE" != "linux-gnu"* ]]; then
+        print_error "This script is designed for Linux systems only."
+        exit 1
+    fi
+    
+    # Check available memory (minimum 1GB)
+    MEMORY_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    MEMORY_GB=$((MEMORY_KB / 1024 / 1024))
+    if [ "$MEMORY_GB" -lt 1 ]; then
+        print_error "Insufficient memory. At least 1GB RAM is required."
+        exit 1
+    fi
+    
+    # Check available disk space (minimum 5GB)
+    DISK_SPACE=$(df / | awk 'NR==2 {print $4}')
+    DISK_SPACE_GB=$((DISK_SPACE / 1024 / 1024))
+    if [ "$DISK_SPACE_GB" -lt 5 ]; then
+        print_error "Insufficient disk space. At least 5GB free space is required."
+        exit 1
+    fi
+    
+    print_success "System requirements check passed"
 }
 
-warning() {
-    echo -e "${YELLOW}[WARNING] $1${NC}"
+# Function to install system dependencies
+install_system_dependencies() {
+    print_status "Installing system dependencies..."
+    
+    # Update package list
+    sudo apt-get update
+    
+    # Install required packages
+    sudo apt-get install -y \
+        python3 \
+        python3-pip \
+        nginx \
+        certbot \
+        python3-certbot-nginx \
+        postgresql \
+        postgresql-contrib \
+        curl \
+        wget \
+        git \
+        unzip \
+        build-essential \
+        libpq-dev \
+        python3-dev \
+        ufw
+    
+    print_success "System dependencies installed"
 }
 
-info() {
-    echo -e "${BLUE}[INFO] $1${NC}"
+# Function to install Miniconda
+install_miniconda() {
+    print_status "Installing Miniconda..."
+    
+    # Download Miniconda
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
+    
+    # Install Miniconda
+    bash ~/miniconda.sh -b -p $HOME/miniconda
+    
+    # Add conda to PATH
+    echo 'export PATH="$HOME/miniconda/bin:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
+    
+    # Initialize conda
+    $HOME/miniconda/bin/conda init bash
+    
+    print_success "Miniconda installed"
 }
 
-# Check if running as root
-check_root() {
-    if [[ $EUID -ne 0 ]]; then
-        error "This script must be run as root (use sudo)"
+# Function to setup firewall
+setup_firewall() {
+    if [ "$CONFIGURE_FIREWALL" = "true" ]; then
+        print_status "Setting up firewall..."
+        
+        # Reset UFW to default
+        sudo ufw --force reset
+        
+        # Set default policies
+        sudo ufw default deny incoming
+        sudo ufw default allow outgoing
+        
+        # Allow SSH
+        if [ "$FIREWALL_ALLOW_SSH" = "true" ]; then
+            sudo ufw allow ssh
+        fi
+        
+        # Allow HTTP
+        if [ "$FIREWALL_ALLOW_HTTP" = "true" ]; then
+            sudo ufw allow 80/tcp
+        fi
+        
+        # Allow HTTPS
+        if [ "$FIREWALL_ALLOW_HTTPS" = "true" ]; then
+            sudo ufw allow 443/tcp
+        fi
+        
+        # Enable firewall
+        sudo ufw --force enable
+        
+        print_success "Firewall configured and enabled"
+    else
+        print_warning "Firewall configuration skipped"
     fi
 }
 
-# Update system packages
-update_system() {
-    log "Updating system packages..."
-    apt-get update -y
-    apt-get upgrade -y
+# Function to setup PostgreSQL
+setup_postgresql() {
+    print_status "Setting up PostgreSQL..."
+    
+    # Start PostgreSQL service
+    sudo systemctl start postgresql
+    sudo systemctl enable postgresql
+    
+    # Create database and user
+    sudo -u postgres psql -c "CREATE DATABASE $POSTGRES_DB;" || print_warning "Database might already exist"
+    sudo -u postgres psql -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';" || print_warning "User might already exist"
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;" || print_warning "Privileges might already be granted"
+    sudo -u postgres psql -c "ALTER USER $POSTGRES_USER CREATEDB;" || print_warning "User privileges might already be set"
+    
+    print_success "PostgreSQL setup completed"
 }
 
-# Install system dependencies
-install_dependencies() {
-    log "Installing system dependencies..."
-    
-    # Install Python and pip
-    apt-get install -y python3 python3-pip
-    
-    # Install nginx
-    apt-get install -y nginx
-    
-    # Install additional tools
-    apt-get install -y curl wget git unzip build-essential libpq-dev python3-dev
-    
-    # Install PostgreSQL
-    apt-get install -y postgresql postgresql-contrib
-    
-    # Install Miniconda if not present
-    if ! command -v conda &> /dev/null; then
-        log "Installing Miniconda..."
-        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh
-        bash /tmp/miniconda.sh -b -p /opt/miniconda3
-        rm /tmp/miniconda.sh
-        
-        # Add conda to PATH for all users
-        echo 'export PATH="/opt/miniconda3/bin:$PATH"' >> /etc/profile
-        echo 'export PATH="/opt/miniconda3/bin:$PATH"' >> /etc/bash.bashrc
-        
-        # Source the profile
-        source /etc/profile
-    fi
-    
-    # Create conda environment
-    log "Creating conda environment..."
-    /opt/miniconda3/bin/conda create -n hackathon-env python=3.11 -y
-    
-    # Install uvicorn in the conda environment
-    /opt/miniconda3/bin/conda run -n hackathon-env pip install uvicorn[standard]
-}
-
-# Create application directory and user
-setup_application() {
-    log "Setting up application directory and user..."
+# Function to create application directory and user
+setup_application_user() {
+    print_status "Setting up application user and directory..."
     
     # Create application user
-    if ! id -u $SERVICE_NAME &>/dev/null; then
-        useradd -r -s /bin/bash -d /opt/$SERVICE_NAME $SERVICE_NAME
-    fi
+    sudo useradd -r -s /bin/false $APP_NAME || print_warning "User might already exist"
     
     # Create application directory
-    mkdir -p /opt/$SERVICE_NAME
-    chown $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME
+    sudo mkdir -p $APP_DIR
+    sudo chown $APP_NAME:$APP_NAME $APP_DIR
+    
+    print_success "Application user and directory setup completed"
+}
+
+# Function to deploy application code
+deploy_application() {
+    print_status "Deploying application code..."
     
     # Copy application files
-    cp -r . /opt/$SERVICE_NAME/
-    chown -R $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME
+    sudo cp -r . $APP_DIR/
+    sudo chown -R $APP_NAME:$APP_NAME $APP_DIR
     
-    # Create logs and backups directories
-    mkdir -p /opt/$SERVICE_NAME/logs /opt/$SERVICE_NAME/backups
-    chown -R $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/logs /opt/$SERVICE_NAME/backups
+    # Install Miniconda for the application user
+    sudo -u $APP_NAME wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $APP_DIR/miniconda.sh
+    sudo -u $APP_NAME bash $APP_DIR/miniconda.sh -b -p $APP_DIR/miniconda
+    sudo -u $APP_NAME rm $APP_DIR/miniconda.sh
     
-    # Install Python dependencies in conda environment
-    log "Installing Python dependencies in conda environment..."
-    cd /opt/$SERVICE_NAME
-    /opt/miniconda3/bin/conda run -n hackathon-env pip install -r requirements.txt
+    # Create conda environment
+    sudo -u $APP_NAME $APP_DIR/miniconda/bin/conda create -n $CONDA_ENV_NAME python=3.11 -y
+    
+    # Install Python dependencies
+    sudo -u $APP_NAME $APP_DIR/miniconda/envs/$CONDA_ENV_NAME/bin/pip install --upgrade pip
+    sudo -u $APP_NAME $APP_DIR/miniconda/envs/$CONDA_ENV_NAME/bin/pip install -r $APP_DIR/requirements.txt
+    
+    print_success "Application code deployed"
 }
 
-# Set up PostgreSQL database
-setup_postgresql() {
-    log "Setting up PostgreSQL database..."
-    
-    # Start and enable PostgreSQL
-    systemctl start postgresql
-    systemctl enable postgresql
-    
-    # Wait for PostgreSQL to be ready
-    log "Waiting for PostgreSQL to be ready..."
-    sleep 5
-    
-    # Check if PostgreSQL is running
-    if ! systemctl is-active --quiet postgresql; then
-        error "PostgreSQL failed to start"
-    fi
-    
-    # Create database and user (only if they don't exist)
-    sudo -u postgres psql << EOF
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'hackathondb') THEN
-        CREATE DATABASE hackathondb;
-    END IF;
-END
-\$\$;
-
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_user WHERE usename = 'maverick') THEN
-        CREATE USER maverick WITH PASSWORD 'Hackathon2025';
-    END IF;
-END
-\$\$;
-
-GRANT ALL PRIVILEGES ON DATABASE hackathondb TO maverick;
-ALTER USER maverick CREATEDB;
-\q
-EOF
-    
-    log "PostgreSQL database setup completed"
-}
-
-# Create .env file with database configuration
-create_env_file() {
-    log "Creating environment configuration..."
-    
-    cat > /opt/$SERVICE_NAME/.env << EOF
-# Database Configuration
-DATABASE_URL=postgresql://maverick:Hackathon2025@localhost:5432/hackathondb
-POSTGRES_DB=hackathondb
-POSTGRES_USER=maverick
-POSTGRES_PASSWORD=Hackathon2025
-POSTGRES_HOST=103.197.191.88
-POSTGRES_PORT=5432
-
-# API Configuration
-PROJECT_NAME=Hackathon Service API
-VERSION=1.0.0
-DESCRIPTION=A FastAPI service for hackathon management
-API_V1_STR=/api/v1
-
-# Security Configuration
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-SECRET_KEY=your-secret-key-here-change-in-production
-
-# OpenAI Configuration
-OPENAI_API_KEY=your-openai-api-key-here
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
-
-# Logging Configuration
-LOG_LEVEL=INFO
-DEBUG=false
-EOF
-
-    chown $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/.env
-    log "Environment file created"
-}
-
-# Run database migrations
-run_migrations() {
-    log "Running database migrations..."
-    
-    cd /opt/$SERVICE_NAME
-    
-    # Run alembic migrations
-    /opt/miniconda3/bin/conda run -n hackathon-env alembic upgrade head
-    
-    log "Database migrations completed"
-}
-
-# Run database migrations
-run_migrations() {
-    log "Running database migrations..."
-    
-    cd /opt/$SERVICE_NAME
-    
-    # Run alembic migrations
-    /opt/miniconda3/bin/conda run -n hackathon-env alembic upgrade head
-    
-    log "Database migrations completed"
-}
-
-# Create systemd service file
+# Function to create systemd service
 create_systemd_service() {
-    log "Creating systemd service..."
+    print_status "Creating systemd service..."
     
-    cat > /etc/systemd/system/$SERVICE_NAME.service << EOF
+    cat << EOF | sudo tee /etc/systemd/system/$SERVICE_NAME
 [Unit]
-Description=Hackathon Service API
+Description=Hackathon Service FastAPI Application
 After=network.target postgresql.service
 
 [Service]
-Type=simple
-WorkingDirectory=/opt/$SERVICE_NAME
-ExecStart=/opt/miniconda3/bin/conda run -n hackathon-env uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-User=$SERVICE_NAME
-Group=$SERVICE_NAME
+Type=exec
+User=$APP_NAME
+Group=$APP_NAME
+WorkingDirectory=$APP_DIR
+Environment=PATH=$APP_DIR/miniconda/envs/$CONDA_ENV_NAME/bin
+ExecStart=$APP_DIR/miniconda/envs/$CONDA_ENV_NAME/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers $UVICORN_WORKERS
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-Environment=PATH=/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+SyslogIdentifier=$APP_NAME
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=$APP_DIR
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
+    
     # Reload systemd and enable service
-    systemctl daemon-reload
-    systemctl enable $SERVICE_NAME.service
+    sudo systemctl daemon-reload
+    sudo systemctl enable $SERVICE_NAME
+    
+    print_success "Systemd service created and enabled"
 }
 
-# Configure nginx
-configure_nginx() {
-    log "Configuring nginx..."
+# Function to setup Nginx
+setup_nginx() {
+    print_status "Setting up Nginx..."
     
-    # Create nginx site configuration
-    cat > /etc/nginx/sites-available/$NGINX_SITE_NAME << EOF
+    # Create Nginx configuration
+    cat << EOF | sudo tee /etc/nginx/sites-available/$APP_NAME
 server {
-    listen $NGINX_PORT;
+    listen 80;
     server_name $DOMAIN_NAME;
     
     # Redirect HTTP to HTTPS
@@ -267,12 +289,10 @@ server {
 }
 
 server {
-    listen $SSL_PORT ssl http2;
+    listen 443 ssl http2;
     server_name $DOMAIN_NAME;
     
-    # SSL Configuration (you'll need to add your SSL certificates)
-    # ssl_certificate /path/to/your/certificate.crt;
-    # ssl_certificate_key /path/to/your/private.key;
+    # SSL configuration will be added by certbot
     
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -281,19 +301,9 @@ server {
     add_header Referrer-Policy "no-referrer-when-downgrade" always;
     add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
     
-    # Gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_proxied expired no-cache no-store private auth;
-    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/javascript;
-    
-    # Client max body size
-    client_max_body_size 100M;
-    
-    # Proxy settings for FastAPI
+    # Proxy settings
     location / {
-        proxy_pass http://localhost:$APP_PORT;
+        proxy_pass http://127.0.0.1:$PORT;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -303,481 +313,342 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
         proxy_read_timeout 86400;
-        proxy_send_timeout 86400;
-    }
-    
-    # Specific proxy for /docs
-    location /docs {
-        proxy_pass http://localhost:$APP_PORT/docs;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
-    }
-    
-    # Proxy for OpenAPI JSON
-    location /openapi.json {
-        proxy_pass http://localhost:$APP_PORT/openapi.json;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
     }
     
     # Health check endpoint
     location /health {
-        proxy_pass http://localhost:$APP_PORT/health;
+        proxy_pass http://127.0.0.1:$PORT/health;
         access_log off;
     }
     
     # Static files (if any)
     location /static/ {
-        alias /opt/$SERVICE_NAME/static/;
+        alias $APP_DIR/static/;
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
 }
 EOF
-
-    # Enable the site
-    ln -sf /etc/nginx/sites-available/$NGINX_SITE_NAME /etc/nginx/sites-enabled/
     
-    # Remove default nginx site
-    rm -f /etc/nginx/sites-enabled/default
-
-    # Test nginx configuration
-    nginx -t
+    # Enable site
+    sudo ln -sf /etc/nginx/sites-available/$APP_NAME /etc/nginx/sites-enabled/
+    sudo rm -f /etc/nginx/sites-enabled/default
     
-    # Restart nginx
-    systemctl restart nginx
-    systemctl enable nginx
+    # Test Nginx configuration
+    sudo nginx -t
+    
+    print_success "Nginx configuration created"
 }
 
-# Setup SSL with Let's Encrypt (optional)
+# Function to setup SSL certificate
 setup_ssl() {
-    info "Setting up SSL with Let's Encrypt..."
+    if [ -z "$DOMAIN_NAME" ] || [ -z "$EMAIL" ]; then
+        print_warning "Domain name or email not set. Skipping SSL setup."
+        return
+    fi
     
-    # Install certbot
-    apt-get install -y certbot python3-certbot-nginx
+    print_status "Setting up SSL certificate..."
+    
+    # Check if DOMAIN_NAME is an IP address
+    if [[ $DOMAIN_NAME =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        print_warning "SSL certificates cannot be issued for IP addresses. HTTPS will not be available."
+        print_warning "Consider using a domain name for HTTPS support."
+        return
+    fi
     
     # Get SSL certificate
-    if [ "$DOMAIN_NAME" != "your-domain.com" ]; then
-        certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos --email admin@$DOMAIN_NAME
-    else
-        warning "Please update DOMAIN_NAME in the script and run certbot manually:"
-        warning "certbot --nginx -d your-domain.com"
+    sudo certbot --nginx -d $DOMAIN_NAME --email $EMAIL --non-interactive --agree-tos
+    
+    # Setup auto-renewal
+    sudo crontab -l 2>/dev/null | { cat; echo "0 12 * * * /usr/bin/certbot renew --quiet"; } | sudo crontab -
+    
+    print_success "SSL certificate setup completed"
+}
+
+# Function to create environment file
+create_environment_file() {
+    print_status "Creating environment file..."
+    
+    cat << EOF | sudo tee $APP_DIR/.env
+# Database settings
+POSTGRES_DB=$POSTGRES_DB
+POSTGRES_USER=$POSTGRES_USER
+POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+POSTGRES_HOST=$POSTGRES_HOST
+POSTGRES_PORT=$POSTGRES_PORT
+
+# Production settings
+DB_POOL_SIZE=$DB_POOL_SIZE
+DB_MAX_OVERFLOW=$DB_MAX_OVERFLOW
+DB_POOL_TIMEOUT=$DB_POOL_TIMEOUT
+DB_POOL_RECYCLE=$DB_POOL_RECYCLE
+
+# Rate limiting
+RATE_LIMIT_REQUESTS=$RATE_LIMIT_REQUESTS
+RATE_LIMIT_WINDOW=$RATE_LIMIT_WINDOW
+
+# Cache settings
+CACHE_TTL=$CACHE_TTL
+CACHE_MAX_SIZE=$CACHE_MAX_SIZE
+
+# Query limits
+MAX_QUERY_LIMIT=$MAX_QUERY_LIMIT
+QUERY_TIMEOUT=$QUERY_TIMEOUT
+
+# Logging
+LOG_LEVEL=$LOG_LEVEL
+EOF
+    
+    sudo chown $APP_NAME:$APP_NAME $APP_DIR/.env
+    sudo chmod 600 $APP_DIR/.env
+    
+    print_success "Environment file created"
+}
+
+# Function to run database migrations
+run_migrations() {
+    print_status "Running database migrations..."
+    
+    cd $APP_DIR
+    sudo -u $APP_NAME $APP_DIR/miniconda/envs/$CONDA_ENV_NAME/bin/alembic upgrade head
+    
+    print_success "Database migrations completed"
+}
+
+# Function to setup monitoring (optional)
+setup_monitoring() {
+    if [ "$ENABLE_MONITORING" = "true" ]; then
+        print_status "Setting up basic monitoring..."
+        
+        # Install htop for system monitoring
+        sudo apt-get install -y htop
+        
+        # Create a simple monitoring script
+        cat << EOF | sudo tee /opt/monitor.sh
+#!/bin/bash
+# Simple monitoring script
+echo "=== System Status ==="
+echo "Date: \$(date)"
+echo "Uptime: \$(uptime)"
+echo "Memory: \$(free -h | grep Mem)"
+echo "Disk: \$(df -h / | tail -1)"
+echo "=== Service Status ==="
+systemctl is-active postgresql
+systemctl is-active nginx
+systemctl is-active $SERVICE_NAME
+echo "=== Application Health ==="
+curl -f http://localhost:$PORT/health 2>/dev/null || echo "Application not responding"
+EOF
+        
+        sudo chmod +x /opt/monitor.sh
+        
+        # Add to crontab for periodic monitoring
+        sudo crontab -l 2>/dev/null | { cat; echo "*/5 * * * * /opt/monitor.sh >> /var/log/monitor.log 2>&1"; } | sudo crontab -
+        
+        print_success "Basic monitoring setup completed"
     fi
 }
 
-# Create firewall rules
-setup_firewall() {
-    log "Setting up firewall..."
-    
-    # Install ufw if not present
-    apt-get install -y ufw
-    
-    # Allow SSH
-    ufw allow ssh
-    
-    # Allow HTTP and HTTPS
-    ufw allow 80/tcp
-    ufw allow 443/tcp
-    
-    # Enable firewall
-    ufw --force enable
-}
-
-# Create backup script
-create_backup_script() {
-    log "Creating backup script..."
-    
-    cat > /opt/$SERVICE_NAME/backup.sh << 'EOF'
+# Function to setup backups (optional)
+setup_backups() {
+    if [ "$ENABLE_BACKUPS" = "true" ]; then
+        print_status "Setting up automatic backups..."
+        
+        # Create backup directory
+        sudo mkdir -p $BACKUP_DIR
+        sudo chown $APP_NAME:$APP_NAME $BACKUP_DIR
+        
+        # Create backup script
+        cat << EOF | sudo tee /opt/backup.sh
 #!/bin/bash
-
 # Backup script for Hackathon Service
-BACKUP_DIR="/opt/hackathon-service/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_NAME="hackathon_backup_$DATE.tar.gz"
-
-# Create backup directory if it doesn't exist
-mkdir -p $BACKUP_DIR
+BACKUP_DIR="$BACKUP_DIR"
+RETENTION_DAYS=$BACKUP_RETENTION_DAYS
+DATE=\$(date +%Y%m%d_%H%M%S)
 
 # Create backup
-tar -czf $BACKUP_DIR/$BACKUP_NAME \
-    --exclude='./logs/*' \
-    --exclude='./backups/*' \
-    --exclude='./.git/*' \
-    --exclude='./__pycache__/*' \
-    --exclude='./*.pyc' \
-    .
+sudo -u $APP_NAME pg_dump -h $POSTGRES_HOST -U $POSTGRES_USER $POSTGRES_DB > \$BACKUP_DIR/db_backup_\$DATE.sql
 
-# Keep only last 7 backups
-find $BACKUP_DIR -name "hackathon_backup_*.tar.gz" -mtime +7 -delete
+# Compress backup
+gzip \$BACKUP_DIR/db_backup_\$DATE.sql
 
-echo "Backup created: $BACKUP_NAME"
+# Remove old backups
+find \$BACKUP_DIR -name "db_backup_*.sql.gz" -mtime +\$RETENTION_DAYS -delete
+
+echo "Backup completed: db_backup_\$DATE.sql.gz"
 EOF
-
-    chmod +x /opt/$SERVICE_NAME/backup.sh
-    chown $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/backup.sh
+        
+        sudo chmod +x /opt/backup.sh
+        
+        # Add to crontab for daily backups
+        sudo crontab -l 2>/dev/null | { cat; echo "0 2 * * * /opt/backup.sh >> /var/log/backup.log 2>&1"; } | sudo crontab -
+        
+        print_success "Automatic backup setup completed"
+    fi
 }
 
-# Create monitoring script
-create_monitoring_script() {
-    log "Creating monitoring script..."
+# Function to start services
+start_services() {
+    print_status "Starting services..."
     
-    cat > /opt/$SERVICE_NAME/monitor.sh << 'EOF'
-#!/bin/bash
-
-# Monitoring script for Hackathon Service
-SERVICE_NAME="hackathon-service"
-APP_PORT=8000
-
-echo "=== Hackathon Service Status ==="
-echo "Date: $(date)"
-echo ""
-
-# Check systemd service status
-echo "Systemd Service Status:"
-systemctl status $SERVICE_NAME --no-pager -l
-echo ""
-
-# Check Python processes
-echo "Python/Uvicorn Processes:"
-ps aux | grep -E "(uvicorn|conda.*hackathon-env)" | grep -v grep
-echo ""
-
-# Check nginx status
-echo "Nginx Status:"
-systemctl status nginx --no-pager -l
-echo ""
-
-# Check application health
-echo "Application Health Check:"
-curl -f http://localhost:$APP_PORT/health 2>/dev/null && echo "✅ Application is healthy" || echo "❌ Application is not responding"
-echo ""
-
-# Check disk usage
-echo "Disk Usage:"
-df -h
-echo ""
-
-# Check memory usage
-echo "Memory Usage:"
-free -h
-echo ""
-
-# Check recent logs
-echo "Recent Application Logs:"
-tail -n 20 /opt/$SERVICE_NAME/logs/*.log 2>/dev/null || echo "No log files found"
-EOF
-
-    chmod +x /opt/$SERVICE_NAME/monitor.sh
-    chown $SERVICE_NAME:$SERVICE_NAME /opt/$SERVICE_NAME/monitor.sh
-}
-
-# Create log rotation
-setup_log_rotation() {
-    log "Setting up log rotation..."
+    # Start Nginx
+    sudo systemctl start nginx
+    sudo systemctl enable nginx
     
-    cat > /etc/logrotate.d/$SERVICE_NAME << EOF
-/opt/$SERVICE_NAME/logs/*.log {
-    daily
-    missingok
-    rotate 7
-    compress
-    delaycompress
-    notifempty
-    create 644 $SERVICE_NAME $SERVICE_NAME
-    postrotate
-        systemctl reload $SERVICE_NAME
-    endscript
+    # Start application service
+    sudo systemctl start $SERVICE_NAME
+    
+    print_success "Services started"
 }
-EOF
+
+# Function to check service status
+check_service_status() {
+    print_status "Checking service status..."
+    
+    # Check PostgreSQL
+    if sudo systemctl is-active --quiet postgresql; then
+        print_success "PostgreSQL is running"
+    else
+        print_error "PostgreSQL is not running"
+        return 1
+    fi
+    
+    # Check Nginx
+    if sudo systemctl is-active --quiet nginx; then
+        print_success "Nginx is running"
+    else
+        print_error "Nginx is not running"
+        return 1
+    fi
+    
+    # Check application service
+    if sudo systemctl is-active --quiet $SERVICE_NAME; then
+        print_success "Application service is running"
+    else
+        print_error "Application service is not running"
+        return 1
+    fi
+    
+    # Check if application is responding
+    sleep 5
+    if curl -f http://localhost:$PORT/health >/dev/null 2>&1; then
+        print_success "Application is responding to health checks"
+    else
+        print_error "Application is not responding to health checks"
+        return 1
+    fi
+    
+    print_success "All services are running correctly"
+}
+
+# Function to show deployment summary
+show_deployment_summary() {
+    echo
+    echo "=========================================="
+    echo "           DEPLOYMENT SUMMARY"
+    echo "=========================================="
+    echo "Application Name: $APP_NAME"
+    echo "Application Directory: $APP_DIR"
+    echo "Service Name: $SERVICE_NAME"
+    echo "Port: $PORT"
+    echo "Domain: $DOMAIN_NAME"
+    echo "Email: $EMAIL"
+    echo "Conda Environment: $CONDA_ENV_NAME"
+    echo "Workers: $UVICORN_WORKERS"
+    echo
+    echo "Service Status:"
+    sudo systemctl status $SERVICE_NAME --no-pager -l
+    echo
+    echo "Nginx Status:"
+    sudo systemctl status nginx --no-pager -l
+    echo
+    echo "Useful Commands:"
+    echo "  View logs: sudo journalctl -u $SERVICE_NAME -f"
+    echo "  Restart service: sudo systemctl restart $SERVICE_NAME"
+    echo "  Stop service: sudo systemctl stop $SERVICE_NAME"
+    echo "  Start service: sudo systemctl start $SERVICE_NAME"
+    echo "  Check status: sudo systemctl status $SERVICE_NAME"
+    echo "  Monitor system: sudo /opt/monitor.sh"
+    echo
+    if [ -n "$DOMAIN_NAME" ]; then
+        if [[ $DOMAIN_NAME =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Your application is available at:"
+            echo "  HTTP: http://$DOMAIN_NAME"
+            echo "  Note: HTTPS not available for IP addresses"
+        else
+            echo "Your application should be available at:"
+            echo "  HTTP: http://$DOMAIN_NAME"
+            echo "  HTTPS: https://$DOMAIN_NAME"
+        fi
+    fi
+    echo "=========================================="
 }
 
 # Main deployment function
-deploy() {
-    log "Starting Hackathon Service deployment..."
+main() {
+    echo "Starting Hackathon Service VPS Deployment..."
+    echo "=========================================="
     
-    check_root
-    update_system
-    install_dependencies
-    setup_application
-    setup_postgresql
-    create_env_file
-    run_migrations
-    create_systemd_service
-    configure_nginx
+    # Check if running with sudo
+    if [[ $EUID -eq 0 ]]; then
+        print_error "Please run this script as a regular user with sudo privileges"
+        exit 1
+    fi
+    
+    # Check system requirements
+    check_system_requirements
+    
+    # Install system dependencies
+    install_system_dependencies
+    
+    # Install Miniconda
+    install_miniconda
+    
+    # Setup firewall
     setup_firewall
-    create_backup_script
-    create_monitoring_script
-    setup_log_rotation
     
-    # Start the service
-    log "Starting the service..."
-    systemctl start $SERVICE_NAME
+    # Setup services
+    setup_postgresql
+    setup_application_user
     
-    # Wait a moment for the service to start
-sleep 10
-
-# Check service status
-    if systemctl is-active --quiet $SERVICE_NAME; then
-        log "✅ Service started successfully!"
-    else
-        error "❌ Service failed to start. Check logs with: journalctl -u $SERVICE_NAME -f"
+    # Deploy application
+    deploy_application
+    
+    # Create systemd service
+    create_systemd_service
+    
+    # Setup Nginx
+    setup_nginx
+    
+    # Setup SSL (if domain and email are provided)
+    if [ -n "$DOMAIN_NAME" ] && [ -n "$EMAIL" ]; then
+        setup_ssl
     fi
     
-    log "Deployment completed successfully!"
-    log ""
-    log "=== Service Information ==="
-    log "Service Name: $SERVICE_NAME"
-    log "Application URL: http://localhost:$APP_PORT"
-    log "Nginx URL: http://$DOMAIN_NAME"
-    log ""
-    log "=== Useful Commands ==="
-    log "Check service status: systemctl status $SERVICE_NAME"
-    log "View service logs: journalctl -u $SERVICE_NAME -f"
-    log "Restart service: systemctl restart $SERVICE_NAME"
-    log "Monitor service: /opt/$SERVICE_NAME/monitor.sh"
-    log "Create backup: /opt/$SERVICE_NAME/backup.sh"
-    log ""
-    log "=== Next Steps ==="
-    log "1. Update DOMAIN_NAME in this script and run setup_ssl()"
-    log "2. Configure your domain DNS to point to this server"
-    log "3. Set up SSL certificates with Let's Encrypt"
-    log "4. Configure environment variables in .env file"
-}
-
-# Function to kill ports
-kill_ports() {
-    log "Force killing processes on ports 80, 443, 8000..."
+    # Create environment file
+    create_environment_file
     
-    # Force kill processes on specific ports
-    sudo fuser -k 80/tcp 2>/dev/null || true
-    sudo fuser -k 443/tcp 2>/dev/null || true
-    sudo fuser -k 8000/tcp 2>/dev/null || true
+    # Run migrations
+    run_migrations
     
-    # Additional force kill for any remaining processes
-    sudo pkill -f "nginx" 2>/dev/null || true
-    sudo pkill -f "uvicorn" 2>/dev/null || true
-    sudo pkill -f "python.*8000" 2>/dev/null || true
+    # Setup monitoring (optional)
+    setup_monitoring
     
-    # Wait a moment for processes to fully stop
-    sleep 3
+    # Setup backups (optional)
+    setup_backups
     
-    log "Ports and processes force killed"
-}
-
-# Function to restart nginx
-restart_nginx() {
-    log "Force restarting nginx..."
-    
-    # Stop nginx forcefully
-    sudo systemctl stop nginx 2>/dev/null || true
-    sudo pkill -f "nginx" 2>/dev/null || true
-    
-    # Wait for nginx to fully stop
-    sleep 2
-    
-    # Test nginx configuration
-    sudo nginx -t
-    
-    # Start nginx
-    sudo systemctl start nginx
-    sudo systemctl status nginx --no-pager -l
-}
-
-# Function to check database
-check_database() {
-    log "Checking database connection..."
-    
-    # Check if PostgreSQL is running
-    if systemctl is-active --quiet postgresql; then
-        log "✅ PostgreSQL is running"
-    else
-        log "❌ PostgreSQL is not running, starting..."
-        sudo systemctl start postgresql
-    fi
-    
-    # Test database connection
-    if PGPASSWORD=Hackathon2025 psql -h localhost -U maverick -d hackathondb -c "SELECT 1;" 2>/dev/null; then
-        log "✅ Database connection successful"
-    else
-        log "❌ Database connection failed"
-        log "Attempting to fix database..."
-        setup_postgresql
-    fi
-}
-
-# Function to start service
-start_service() {
-    log "Force starting hackathon service..."
-    
-    # Stop service forcefully if running
-    sudo systemctl stop hackathon-service 2>/dev/null || true
-    sudo pkill -f "hackathon-service" 2>/dev/null || true
-    sudo pkill -f "uvicorn.*8000" 2>/dev/null || true
-    
-    # Wait for service to fully stop
-    sleep 3
-    
-    # Start the service
-    sudo systemctl start hackathon-service
-    
-    # Wait for service to start
-    sleep 15
+    # Start services
+    start_services
     
     # Check service status
-    if systemctl is-active --quiet hackathon-service; then
-        log "✅ Service started successfully!"
+    if check_service_status; then
+        print_success "Deployment completed successfully!"
+        show_deployment_summary
     else
-        log "❌ Service failed to start"
-        sudo systemctl status hackathon-service --no-pager -l
+        print_error "Deployment completed with errors. Please check the logs."
+        exit 1
     fi
 }
 
-# Function to show usage
-usage() {
-    echo "Usage: $0 [OPTION]"
-    echo ""
-    echo "Options:"
-    echo "  deploy      Deploy the complete service"
-    echo "  update      Update the service"
-    echo "  restart     Restart the service"
-    echo "  status      Show service status"
-    echo "  logs        Show service logs"
-    echo "  backup      Create backup"
-    echo "  monitor     Run monitoring script"
-    echo "  kill-ports  Kill processes on ports 80, 443, 8000"
-    echo "  restart-nginx Restart nginx service"
-    echo "  check-db    Check database connection"
-    echo "  start       Start hackathon service"
-    echo "  full-restart Kill ports, restart nginx, check db, start service"
-    echo "  help        Show this help message"
-    echo ""
-}
-
-# Function to update service
-update_service() {
-    log "Updating Hackathon Service..."
-    
-    # Pull latest changes
-    cd /opt/$SERVICE_NAME
-    git pull origin main
-    
-    # Install/update Python dependencies in conda environment
-    /opt/miniconda3/bin/conda run -n hackathon-env pip install -r requirements.txt
-    
-    # Restart service
-    systemctl restart $SERVICE_NAME
-    
-    log "Service updated successfully!"
-}
-
-# Function to restart service
-restart_service() {
-    log "Restarting Hackathon Service..."
-    systemctl restart $SERVICE_NAME
-    log "Service restarted!"
-}
-
-# Function to show status
-show_status() {
-    systemctl status $SERVICE_NAME --no-pager -l
-}
-
-# Function to show logs
-show_logs() {
-    journalctl -u $SERVICE_NAME -f
-}
-
-# Function to create backup
-create_backup() {
-    /opt/$SERVICE_NAME/backup.sh
-}
-
-# Function to run monitoring
-run_monitoring() {
-    /opt/$SERVICE_NAME/monitor.sh
-}
-
-# Main script logic
-case "${1:-deploy}" in
-    deploy)
-        deploy
-        ;;
-    update)
-        update_service
-        ;;
-    restart)
-        restart_service
-        ;;
-    status)
-        show_status
-        ;;
-    logs)
-        show_logs
-        ;;
-    backup)
-        create_backup
-        ;;
-    monitor)
-        run_monitoring
-        ;;
-    kill-ports)
-        kill_ports
-        ;;
-    restart-nginx)
-        restart_nginx
-        ;;
-    check-db)
-        check_database
-        ;;
-    start)
-        start_service
-        ;;
-    full-restart)
-        log "Performing FORCE full restart..."
-        log "This will force kill all processes and restart everything..."
-        
-        # Force kill all related processes
-        kill_ports
-        
-        # Force restart nginx
-        restart_nginx
-        
-        # Check and restart database if needed
-        check_database
-        
-        # Force restart service
-        start_service
-        
-        # Final verification
-        log "Verifying all services..."
-        sleep 5
-        
-        # Check final status
-        if systemctl is-active --quiet hackathon-service && systemctl is-active --quiet nginx; then
-            log "✅ FORCE full restart completed successfully!"
-            log "Testing endpoints..."
-            curl -s -f http://localhost:8000/health >/dev/null 2>&1 && log "✅ Local health check OK" || log "❌ Local health check failed"
-            curl -s -f https://dev-ngurah.fun/health >/dev/null 2>&1 && log "✅ External health check OK" || log "❌ External health check failed"
-        else
-            log "❌ Some services failed to start properly"
-            sudo systemctl status hackathon-service nginx --no-pager -l
-        fi
-        ;;
-    help|--help|-h)
-        usage
-        ;;
-    *)
-        error "Unknown option: $1"
-        usage
-        exit 1
-        ;;
-esac
+# Run main function
+main "$@" 
