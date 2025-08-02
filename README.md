@@ -16,45 +16,85 @@ A FastAPI-based service for hackathon management with user authentication, proje
 ## Project Structure
 
 ```
-exportco/
-├── app/
+hackathon-service/
+├── app/                          # Main application package
 │   ├── __init__.py
-│   ├── main.py              # FastAPI app instance, middlewares, routers
+│   ├── main.py                   # FastAPI app instance and configuration
+│   ├── api/                      # API routers (organized by feature)
 │   │   ├── __init__.py
-│   │   ├── main.py              # FastAPI app instance, middlewares, routers
-│   │   ├── api/                 # API routers (organized by feature)
-│   │   │   ├── __init__.py
-│   │   │   ├── v1/              # Versioning
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── user.py      # User endpoints
-│   │   │   │   └── auth.py      # Auth endpoints
-│   │   │   ├── core/                # Core config and utilities
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── config.py        # Settings (can use Pydantic)
-│   │   │   │   └── security.py      # Password hashing, JWT tokens, etc.
-│   │   │   ├── models/              # SQLAlchemy models
-│   │   │   │   ├── __init__.py
-│   │   │   │   └── user.py
-│   │   │   ├── schemas/             # Pydantic schemas for request/response
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── user.py
-│   │   │   │   └── auth.py
-│   │   │   ├── services/            # Business logic (usecases, domain services)
-│   │   │   │   ├── __init__.py
-│   │   │   │   └── user_service.py
-│   │   │   ├── db/                  # Database session and initializations
-│   │   │   │   ├── __init__.py
-│   │   │   │   └── database.py
-│   │   │   └── utils/               # Helper functions/utilities
-│   │   │       ├── __init__.py
-│   │   │       └── helpers.py
-│   │   ├── tests/
-│   │   │   ├── __init__.py
-│   │   │   ├── conftest.py
-│   │   │   └── test_user.py
-│   │   ├── .env                     # Environment variables
-│   │   └── requirements.txt         # Dependencies
-│   └── README.md
+│   │   └── v1/                   # API version 1
+│   │       ├── __init__.py
+│   │       ├── auth.py           # Authentication endpoints
+│   │       ├── user.py           # User management endpoints
+│   │       ├── export_data.py    # Export data endpoints
+│   │       ├── export.py         # Export analysis endpoints
+│   │       ├── komoditi.py       # Commodity endpoints
+│   │       └── prompt_library.py # Prompt library endpoints
+│   ├── core/                     # Core configuration and utilities
+│   │   ├── __init__.py
+│   │   ├── config.py             # Application settings and configuration
+│   │   └── security.py           # Password hashing, JWT tokens, etc.
+│   ├── models/                   # SQLAlchemy database models
+│   │   ├── __init__.py
+│   │   ├── user.py               # User model
+│   │   ├── export_data.py        # Export data model
+│   │   ├── export_document.py    # Export document model
+│   │   ├── export_document_country.py
+│   │   ├── export_duty_chunks.py
+│   │   ├── currency_rates.py     # Currency exchange rates
+│   │   ├── komoditi.py           # Commodity model
+│   │   └── prompt_library.py     # Prompt library model
+│   ├── schemas/                  # Pydantic schemas for request/response
+│   │   ├── __init__.py
+│   │   ├── auth.py               # Authentication schemas
+│   │   ├── user.py               # User schemas
+│   │   ├── export_data.py        # Export data schemas
+│   │   ├── komoditi.py           # Commodity schemas
+│   │   └── prompt_library.py     # Prompt library schemas
+│   ├── services/                 # Business logic and services
+│   │   ├── __init__.py
+│   │   ├── user_service.py       # User management service
+│   │   ├── export_data_service.py # Export data analysis service
+│   │   ├── export_document_service.py
+│   │   ├── export_duty_service.py # Export duty calculation service
+│   │   ├── komoditi_service.py   # Commodity management service
+│   │   ├── prompt_library_service.py # Prompt library service
+│   │   ├── chain_of_thought_service.py # AI reasoning service
+│   │   └── optimized_chatbot_service.py # AI chatbot service
+│   ├── db/                       # Database configuration
+│   │   ├── __init__.py
+│   │   └── database.py           # Database session and connection
+│   ├── middleware/               # Custom middleware
+│   │   ├── __init__.py
+│   │   └── logging_middleware.py # Request logging middleware
+│   └── utils/                    # Helper functions and utilities
+│       ├── __init__.py
+│       ├── helpers.py            # General helper functions
+│       └── logger.py             # Logging utilities
+├── alembic/                      # Database migrations
+│   ├── env.py                    # Alembic environment configuration
+│   ├── script.py.mako            # Migration template
+│   └── versions/                 # Migration files
+├── tests/                        # Test suite
+│   ├── __init__.py
+│   ├── conftest.py               # Test configuration
+│   ├── test_user.py              # User tests
+│   └── test_export.py            # Export tests
+├── examples/                     # Example scripts and tests
+│   ├── create_test_user.py       # User creation example
+│   ├── test_auth_api.py          # Authentication API tests
+│   ├── add_currency_rates.py     # Currency data examples
+│   └── ...                       # Various other examples
+├── logs/                         # Application logs
+├── .env.example                  # Environment variables template
+├── requirements.txt               # Python dependencies
+├── alembic.ini                   # Alembic configuration
+├── deploy.sh                     # Deployment script
+├── deploy.config                  # Deployment configuration
+├── update.sh                     # Update script
+├── DEPLOYMENT.md                 # Deployment documentation
+├── README.md                     # This file
+└── vercel.json                   # Vercel deployment config
 ```
 
 ## Installation
@@ -63,7 +103,7 @@ exportco/
 
 ```bash
 git clone <repository-url>
-cd exportco
+cd hackathon-service
 ```
 
 2. Create a virtual environment:
@@ -81,12 +121,18 @@ pip install -r requirements.txt
 
 4. Create a `.env` file with your configuration:
 
+```bash
+cp .env.example .env
+```
+
+Then edit the `.env` file with your actual values:
+
 ```env
 # API Configuration
 PROJECT_NAME=Hackathon Service API
 VERSION=1.0.0
-DESCRIPTION=A FastAPI service for hackathon management
-API_V1_STR=/export/v1
+DESCRIPTION=A FastAPI service for export data analysis
+API_V1_STR=/api/v1
 
 # Server Configuration
 HOST=0.0.0.0
