@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1 import user, auth, export_data, komoditi, export
 from app.api.v1.prompt_library import router as prompt_library_router
+from app.api.v1.chatbot import router as chatbot_router
 from app.db.database import create_tables
 from app.utils.logger import log_server_startup, log_server_shutdown, log_database_connection, log_configuration_validation
 from app.middleware.logging_middleware import LoggingMiddleware
@@ -33,6 +34,7 @@ app.include_router(export_data.router, prefix=settings.API_V1_STR)
 app.include_router(komoditi.router, prefix=settings.API_V1_STR)
 app.include_router(export.router, prefix=settings.API_V1_STR)
 app.include_router(prompt_library_router, prefix=settings.API_V1_STR)
+app.include_router(chatbot_router, prefix=settings.API_V1_STR)
 
 @app.on_event("startup")
 async def startup_event():
