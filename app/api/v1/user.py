@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.db.database import get_db
 from app.services.user_service import UserService
-from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.user import UserUpdate, UserResponse
+from app.schemas.auth import UserRegister
 import redis
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -39,7 +40,7 @@ async def get_user(
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
-    user: UserCreate,
+    user: UserRegister,
     db: Session = Depends(get_db)
 ):
     """Create a new user"""

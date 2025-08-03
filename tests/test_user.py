@@ -7,10 +7,11 @@ from app.schemas.user import UserCreate
 def test_create_user(client: TestClient):
     """Test creating a new user"""
     user_data = {
+        "phone_number": "+6281234567890",
+        "name": "Test User",
         "email": "test@example.com",
         "username": "testuser",
-        "password": "testpassword",
-        "full_name": "Test User"
+        "password": "TestPassword123"
     }
     response = client.post("/api/v1/users/", json=user_data)
     assert response.status_code == 201
@@ -29,10 +30,11 @@ def test_get_user(client: TestClient):
     """Test getting a specific user"""
     # First create a user
     user_data = {
+        "phone_number": "+6281234567891",
+        "name": "Test User 2",
         "email": "test2@example.com",
         "username": "testuser2",
-        "password": "testpassword",
-        "full_name": "Test User 2"
+        "password": "TestPassword123"
     }
     create_response = client.post("/api/v1/users/", json=user_data)
     user_id = create_response.json()["id"]

@@ -304,13 +304,63 @@ class AsyncExportDataService:
             )
             prev_quarter_data = {row.comodity_code: row.total_netweight for row in result.fetchall()}
             
-            # Get commodity names and prices in batch
+            # Calculate quarter date range for price calculation
+            from datetime import date
+            quarter_start_date = date(int(latest_year), start_month, 1)
+            quarter_end_date = date(int(latest_year), end_month, 28)  # Using 28 to handle February
+            
+            # Get commodity names and average prices for the quarter period
             result = await self.db.execute(
-                select(Komoditi.kode_komoditi, Komoditi.nama_komoditi, Komoditi.harga_komoditi)
-                .filter(Komoditi.kode_komoditi.in_(commodity_codes))
+                text("""
+                    SELECT 
+                        k.kode_komoditi,
+                        k.nama_komoditi,
+                        AVG(k.harga_komoditi) as avg_harga_komoditi,
+                        COUNT(k.harga_komoditi) as price_count,
+                        MIN(k.tanggal_harga) as earliest_date,
+                        MAX(k.tanggal_harga) as latest_date
+                    FROM komoditi k
+                    WHERE k.kode_komoditi = ANY(:commodity_codes)
+                        AND k.tanggal_harga >= :start_date
+                        AND k.tanggal_harga <= :end_date
+                        AND k.harga_komoditi IS NOT NULL
+                    GROUP BY k.kode_komoditi, k.nama_komoditi
+                """),
+                {
+                    'commodity_codes': commodity_codes,
+                    'start_date': quarter_start_date,
+                    'end_date': quarter_end_date
+                }
             )
-            commodities = result.fetchall()
-            commodity_map = {c.kode_komoditi: c for c in commodities}
+            quarter_commodities = result.fetchall()
+            quarter_commodity_map = {c.kode_komoditi: c for c in quarter_commodities}
+            
+            # Get latest prices for commodities that don't have quarter data
+            missing_commodities = [code for code in commodity_codes if code not in quarter_commodity_map]
+            latest_commodity_map = {}
+            
+            if missing_commodities:
+                result = await self.db.execute(
+                    text("""
+                        SELECT DISTINCT ON (k.kode_komoditi)
+                            k.kode_komoditi,
+                            k.nama_komoditi,
+                            k.harga_komoditi as avg_harga_komoditi,
+                            1 as price_count,
+                            k.tanggal_harga as earliest_date,
+                            k.tanggal_harga as latest_date
+                        FROM komoditi k
+                        WHERE k.kode_komoditi = ANY(:missing_commodities)
+                            AND k.harga_komoditi IS NOT NULL
+                        ORDER BY k.kode_komoditi, k.tanggal_harga DESC NULLS LAST
+                    """),
+                    {'missing_commodities': missing_commodities}
+                )
+                latest_commodities = result.fetchall()
+                latest_commodity_map = {c.kode_komoditi: c for c in latest_commodities}
+            
+            # Combine quarter data with latest data for missing commodities
+            commodity_map = {**quarter_commodity_map, **latest_commodity_map}
             
             # Process country data by commodity
             country_by_commodity = {}
@@ -340,12 +390,14 @@ class AsyncExportDataService:
                 commodity_info = commodity_map.get(comodity_code)
                 comodity_name = commodity_info.nama_komoditi if commodity_info else comodity_code
                 
-                # Get average price
+                # Get average price based on quarter period or latest available
                 average_price = "Rp 0/kg"
-                if commodity_info and commodity_info.harga_komoditi:
+                if commodity_info and commodity_info.avg_harga_komoditi:
                     try:
-                        price = float(commodity_info.harga_komoditi)
-                        average_price = f"Rp {price:,.0f}/kg".replace(",", ".")
+                        avg_price = float(commodity_info.avg_harga_komoditi)
+                        # Round to nearest integer and format
+                        rounded_price = round(avg_price)
+                        average_price = f"Rp {rounded_price:,}/kg".replace(",", ".")
                     except (ValueError, TypeError):
                         pass
                 
