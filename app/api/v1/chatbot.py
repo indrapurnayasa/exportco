@@ -111,6 +111,7 @@ async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db
 
         # Use optimized chatbot service with context
         optimized_service = OptimizedChatbotService(db)
+        
         result = await optimized_service.process_chatbot_query(context_query)
 
         # Add prompt logging if available
@@ -151,8 +152,8 @@ async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db
         except Exception as e:
             print(f"[REDIS] Error logging response: {e}")
         
-        # Add session_id to response
-        result["session_id"] = session_id
+        # Add sessionId to response
+        result["sessionId"] = session_id
         return result
 
     except Exception as e:

@@ -23,7 +23,7 @@ class ChainOfThoughtService:
         try:
             # Prompt untuk Chain of Thought
             cot_prompt = f"""
-Kamu adalah ExportMate, asisten AI ekspor Indonesia yang menggunakan Chain of Thought untuk menganalisis pertanyaan.
+Kamu adalah ExportIn, asisten AI ekspor Indonesia yang menggunakan Chain of Thought untuk menganalisis pertanyaan.
 
 PERTANYAAN USER: {user_query}
 
@@ -109,7 +109,7 @@ Sekarang, berikan analisis dalam format JSON:
         try:
             # Prompt untuk response generation dengan CoT
             response_prompt = f"""
-Kamu adalah ExportMate, asisten AI ekspor Indonesia.
+Kamu adalah ExportIn, asisten AI ekspor Indonesia.
 
 ANALISIS SEBELUMNYA:
 {json.dumps(analysis, indent=2, ensure_ascii=False)}
@@ -200,7 +200,7 @@ Sekarang berikan response yang sesuai dengan analisis dan prompt template di ata
             response = await self._async_openai_call(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "Kamu adalah ExportMate, asisten AI ekspor Indonesia yang memberikan jawaban yang akurat dan informatif."},
+                    {"role": "system", "content": "Kamu adalah ExportIn, asisten AI ekspor Indonesia yang memberikan jawaban yang akurat dan informatif."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,

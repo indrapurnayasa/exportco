@@ -4,11 +4,45 @@ from typing import List, Dict, Any, Optional
 from app.models.export_document_country import ExportDocumentCountry
 from app.models.export_document import ExportDocument
 import re
+import math
 from datetime import datetime
 
 class ExportDocumentService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def get_available_countries(self) -> List[str]:
+        """
+        Get list of available countries in the database
+        """
+        try:
+            query = select(ExportDocumentCountry.country_name).distinct()
+            result = await self.db.execute(query)
+            countries = result.scalars().all()
+            return [country for country in countries if country]
+        except Exception as e:
+            print(f"Error getting available countries: {e}")
+            return []
+
+    async def get_country_document_summary(self) -> Dict[str, int]:
+        """
+        Get summary of available documents per country
+        """
+        try:
+            query = select(
+                ExportDocumentCountry.country_name,
+                func.count(ExportDocumentCountry.id).label('doc_count')
+            ).group_by(ExportDocumentCountry.country_name)
+            
+            result = await self.db.execute(query)
+            summary = {}
+            for row in result:
+                summary[row.country_name] = row.doc_count
+            
+            return summary
+        except Exception as e:
+            print(f"Error getting country document summary: {e}")
+            return {}
 
     async def get_documents_by_country(self, country_name: str) -> List[Dict[str, Any]]:
         """
@@ -155,6 +189,8 @@ class ExportDocumentService:
             if country_key.split()[0] in query_lower:
                 return country_name
         
+        # Check for country names that might be in the database
+        # This will be handled by the database query in get_documents_by_country
         return None
 
     def extract_requested_document_name(self, query: str) -> Optional[str]:
@@ -189,22 +225,115 @@ class ExportDocumentService:
 
     async def get_export_documents_response(self, query: str, show_template: bool = False) -> dict:
         """
-        Main function to get export documents response based on user query, following ExportMate prompt strictly.
+        Main function to get export documents response based on user query, following ExportIn prompt strictly.
         :param query: User query
         :param show_template: If True, will return template HTML for requested document(s)
         :return: Dict with formatted answer and details
         """
         country = self.extract_country_from_query(query)
+        
+        # Handle general document requests when no specific country is mentioned
         if not country:
-            return {
-                "success": False,
-                "message": (
-                    "Maaf, dokumen ekspor untuk negara tersebut belum tersedia di database. "
-                    "Silakan hubungi instansi resmi seperti Kemendag atau atase perdagangan negara tujuan."
-                ),
-                "documents": [],
-                "country": None
-            }
+            # Check if this is a general document creation request
+            query_lower = query.lower()
+            
+            # Keywords for document creation/request
+            creation_keywords = [
+                "buat", "buatkan", "generate", "membuat", "ingin buat", "ingin membuat", 
+                "mau buat", "mau membuat", "tolong buat", "bisa buat", "bisa buatkan",
+                "saya ingin", "saya mau", "saya butuh", "saya perlu", "tolong", "bisa",
+                "mohon", "minta", "request", "create", "generate", "make"
+            ]
+            
+            document_keywords = [
+                "dokumen", "document", "surat", "form", "template", "invoice", 
+                "packing", "shipping", "ekspor", "export", "perdagangan", "trade",
+                "commercial", "proforma", "delivery", "letter of credit", "lc"
+            ]
+            
+            # Check for general document requests (creation + document keywords)
+            is_general_document_request = (
+                any(keyword in query_lower for keyword in creation_keywords) and
+                any(keyword in query_lower for keyword in document_keywords)
+            )
+            
+            # Also check for general questions about documents
+            general_document_questions = [
+                "apa dokumen", "dokumen apa", "dokumen yang", "dokumen untuk",
+                "surat apa", "surat yang", "form apa", "template apa",
+                "dokumen ekspor", "dokumen perdagangan", "dokumen export",
+                "surat ekspor", "surat perdagangan", "surat export"
+            ]
+            
+            is_general_question = any(phrase in query_lower for phrase in general_document_questions)
+            
+            # Combine both conditions
+            is_general_document_request = is_general_document_request or is_general_question
+            
+            if is_general_document_request:
+                # Get available countries and provide a helpful response
+                available_countries = await self.get_available_countries()
+                country_summary = await self.get_country_document_summary()
+                
+                if available_countries:
+                    # Take first 2 countries as examples
+                    example_countries = available_countries[:2]
+                    country_list = ", ".join(example_countries)
+                    
+                    # Determine the type of question and provide appropriate response
+                    query_lower = query.lower()
+                    
+                    # Check if it's a creation request vs general question
+                    is_creation_request = any(keyword in query_lower for keyword in [
+                        "buat", "buatkan", "generate", "membuat", "ingin buat", "ingin membuat", 
+                        "mau buat", "mau membuat", "tolong buat", "bisa buat", "bisa buatkan"
+                    ])
+                    
+                    # Provide flexible data for AI to generate natural response
+                    response_data = {
+                        "available_countries": available_countries,
+                        "total_countries": len(available_countries),
+                        "example_countries": example_countries,
+                        "country_summary": country_summary,
+                        "is_creation_request": is_creation_request,
+                        "total_documents": sum(country_summary.values()) if country_summary else 0
+                    }
+                    
+                    # Let AI generate the response naturally
+                    response_parts = [
+                        f"Sistem mendukung dokumen ekspor untuk {len(available_countries)} negara.",
+                        f"Contoh negara: {country_list}.",
+                        "Sebutkan negara tujuan untuk melihat dokumen yang diperlukan."
+                    ]
+                    
+                    return {
+                        "success": True,
+                        "country": None,
+                        "message": "\n".join(response_parts),
+                        "documents": [],
+                        "available_countries": available_countries,
+                        "country_summary": country_summary
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": (
+                            "Maaf, saat ini belum ada data dokumen ekspor yang tersedia di database. "
+                            "Silakan hubungi instansi resmi seperti Kemendag atau atase perdagangan negara tujuan."
+                        ),
+                        "documents": [],
+                        "country": None
+                    }
+            else:
+                return {
+                    "success": False,
+                    "message": (
+                        "Maaf, dokumen ekspor untuk negara tersebut belum tersedia di database. "
+                        "Silakan hubungi instansi resmi seperti Kemendag atau atase perdagangan negara tujuan."
+                    ),
+                    "documents": [],
+                    "country": None
+                }
 
         documents = await self.get_documents_by_country(country)
         if not documents:
@@ -246,29 +375,12 @@ class ExportDocumentService:
         )
 
         if is_just_asking_documents:
-            # Only mention the country, do not use placeholders or template lookup
+            # Provide simple, flexible response with clear distinction
             response_lines = [
-                f"Berikut adalah daftar dokumen yang umumnya diperlukan untuk ekspor ke {country}:",
-                "",
-                "Dokumen yang bisa dibantu sistem (otomatis):"
+                f"Dokumen ekspor ke {country}:",
+                f"Sistem dapat bantu buat: {', '.join([doc['document_name'] for doc in docs_auto]) if docs_auto else 'Tidak ada'}",
+                f"Perlu apply ke instansi: {', '.join([doc['document_name'] for doc in docs_manual]) if docs_manual else 'Tidak ada'}"
             ]
-            if docs_auto:
-                for doc in docs_auto:
-                    response_lines.append(f"- {doc['document_name']}")
-            else:
-                response_lines.append("(Belum ada dokumen otomatis untuk negara ini)")
-            response_lines.append("")
-            response_lines.append("Dokumen yang perlu disiapkan manual:")
-            if docs_manual:
-                for doc in docs_manual:
-                    if doc["source"]:
-                        response_lines.append(f"- {doc['document_name']} (sumber: {doc['source']})")
-                    else:
-                        response_lines.append(f"- {doc['document_name']}")
-            else:
-                response_lines.append("(Tidak ada dokumen manual untuk negara ini)")
-            response_lines.append("")
-            response_lines.append("Catatan: Untuk dokumen otomatis, Anda dapat meminta bantuan sistem untuk membuatkan template.")
             return {
                 "success": True,
                 "country": country,
@@ -278,45 +390,22 @@ class ExportDocumentService:
                 "total_documents": len(documents)
             }
 
-        # Format output as per new prompt (for template/preview intent)
+        # Provide structured data for AI to generate natural response
+        response_data = {
+            "country": country,
+            "auto_documents": docs_auto,
+            "manual_documents": docs_manual,
+            "total_documents": len(documents),
+            "auto_count": len(docs_auto),
+            "manual_count": len(docs_manual)
+        }
+        
+        # Generate simple, flexible response with clear distinction
         response_lines = [
-            f"PERSIAPAN DOKUMEN EKSPOR KE {country.upper()}\n",
-            f"Terima kasih. Berikut adalah daftar lengkap dokumen yang perlu Anda siapkan untuk melakukan ekspor dari Indonesia ke {country}:",
-            "\n==="
+            f"Dokumen ekspor untuk {country}:",
+            f"- Sistem dapat bantu buat ({len(docs_auto)}): {', '.join([doc['document_name'] for doc in docs_auto]) if docs_auto else 'Tidak ada'}",
+            f"- Perlu apply ke instansi ({len(docs_manual)}): {', '.join([doc['document_name'] for doc in docs_manual]) if docs_manual else 'Tidak ada'}"
         ]
-
-        # Section: Dokumen otomatis
-        response_lines.append("\nDOKUMEN YANG BISA KAMI BANTU BUATKAN SECARA OTOMATIS\n")
-        if docs_auto:
-            response_lines.append("Dokumen-dokumen di bawah ini tersedia dalam sistem kami dan dapat kami bantu buatkan jika Anda membutuhkannya:")
-            for doc in docs_auto:
-                response_lines.append(f"- {doc['document_name']}")
-            response_lines.append("")
-            response_lines.append(f"Jika Anda ingin memproses salah satu dokumen di atas, cukup beri perintah seperti:")
-            response_lines.append(f'"Tolong buatkan invoice untuk pengiriman ke {country}."')
-            response_lines.append(f'"Tampilkan template packing list."')
-        else:
-            response_lines.append("(Belum ada dokumen yang dapat dibuat otomatis untuk negara ini)")
-        response_lines.append("\n===\n")
-
-        # Section: Dokumen manual
-        response_lines.append("DOKUMEN YANG PERLU ANDA SIAPKAN SECARA MANUAL\n")
-        if docs_manual:
-            response_lines.append("Dokumen berikut belum tersedia dalam sistem dan umumnya disiapkan oleh pihak terkait atau instansi resmi. Mohon pastikan Anda telah mengurus dokumen-dokumen berikut:")
-            for doc in docs_manual:
-                if doc["source"]:
-                    response_lines.append(f"- {doc['document_name']} (sumber: {doc['source']})")
-                else:
-                    response_lines.append(f"- {doc['document_name']}")
-        else:
-            response_lines.append("(Tidak ada dokumen manual untuk negara ini)")
-        response_lines.append("\n===\n")
-
-        # Section: Catatan
-        response_lines.append("CATATAN\n")
-        response_lines.append("- Dokumen yang tersedia di sistem dapat kami bantu buatkan dalam bentuk template yang bisa Anda lengkapi dan konversi ke file PDF.")
-        response_lines.append("- Silakan sampaikan jika Anda ingin melihat pratinjau salah satu dokumen, atau meminta bantuan pembuatan dokumen tersebut.")
-        response_lines.append("- ExportMate siap mendampingi proses ekspor Anda agar berjalan lebih mudah dan sesuai ketentuan.\n")
 
         # Only show template if explicitly requested
         template_previews = []
