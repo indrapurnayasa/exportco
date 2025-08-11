@@ -5,6 +5,8 @@ from app.api.v1 import user, auth, export_data, komoditi, export
 from app.api.v1.prompt_library import router as prompt_library_router
 from app.api.v1.chatbot import router as chatbot_router
 from app.db.database import create_tables
+from app.services.prompt_library_service import PromptLibraryService
+from app.db.database import AsyncSessionLocal
 from app.utils.logger import log_server_startup, log_server_shutdown, log_database_connection, log_configuration_validation
 from app.middleware.logging_middleware import LoggingMiddleware
 
@@ -54,6 +56,20 @@ async def startup_event():
     except Exception as e:
         log_database_connection(False, str(e))
         raise
+
+    # Backfill prompt embeddings asynchronously (best-effort)
+    try:
+        async def _backfill():
+            async with AsyncSessionLocal() as session:
+                service = PromptLibraryService(session)
+                updated = await service.backfill_embeddings()
+                if updated:
+                    print(f"Backfilled embeddings for {updated} prompts")
+        import asyncio
+        asyncio.create_task(_backfill())
+    except Exception:
+        # Non-fatal; continue startup
+        pass
 
 @app.get("/")
 async def root():

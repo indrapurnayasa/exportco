@@ -144,7 +144,7 @@ ALLOWED_HOSTS=["*"]
 
 # OpenAI API Configuration
 OPENAI_API_KEY=your-openai-api-key-here
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
 # PostgreSQL Database Configuration
 POSTGRES_DB=exportindb

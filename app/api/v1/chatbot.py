@@ -21,14 +21,7 @@ redis_client = redis.Redis.from_url(
     health_check_interval=30
 )
 
-# Use the new Redis configuration for logging with timeout settings
-log_redis = redis.Redis.from_url(
-    "redis://default:ENRwPubGW1VmpdNmr5kSJG7jqW7IdyKG@redis-16098.crce185.ap-seast-1-1.ec2.redns.redis-cloud.com:16098",
-    socket_timeout=5,
-    socket_connect_timeout=5,
-    retry_on_timeout=True,
-    health_check_interval=30
-)
+# Note: We keep Redis only for conversation history, not for response caching
 
 class ChatbotQuery(BaseModel):
     query: str
@@ -63,56 +56,23 @@ async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db
                 print(f"[REDIS] Error getting conversation history: {e}")
                 conversation_history = []
         
-        # Create context-aware query
-        context_query = payload.query
-        if conversation_history:
-            # Add recent conversation context (last 3 exchanges)
-            recent_context = conversation_history[-6:]  # Last 3 Q&A pairs
-            context_parts = []
-            for exchange in recent_context:
-                context_parts.append(f"User: {exchange.get('user_query', '')}")
-                context_parts.append(f"Assistant: {exchange.get('assistant_response', '')}")
-            context_query = f"Previous conversation:\n" + "\n".join(context_parts) + f"\n\nCurrent question: {payload.query}"
-        
-        # Use context-aware query for caching to get better responses
-        cache_key = f"chatbot:{context_query}"
-        cached = None
-        try:
-            cached = redis_client.get(cache_key)
-        except Exception as e:
-            print(f"[REDIS] Error getting cache: {e}")
-            cached = None
-            
-        if cached:
-            response = json.loads(cached)
-            # Update conversation history
-            conversation_history.append({
-                "user_query": payload.query,
-                "assistant_response": response.get("answer", ""),
-                "timestamp": time.time()
-            })
-            # Store updated history
-            try:
-                history_key = f"chatbot_history:{session_id}"
-                redis_client.set(history_key, json.dumps(conversation_history), ex=3600)  # 1 hour expiry
-            except Exception as e:
-                print(f"[REDIS] Error storing conversation history: {e}")
-            
-            # Log the response to Redis log DB
-            try:
-                log_key = f"chatbotlog:{int(time.time())}:{random.randint(1000,9999)}"
-                log_redis.set(log_key, json.dumps(response), ex=1800)
-            except Exception as e:
-                print(f"[REDIS] Error logging response: {e}")
-            
-            # Add session_id to cached response
-            response["session_id"] = session_id
-            return response
+        # Disable response caching: always compute fresh result
 
         # Use optimized chatbot service with context
         optimized_service = OptimizedChatbotService(db)
         
-        result = await optimized_service.process_chatbot_query(context_query)
+        # Detect ongoing session and forward raw query + history. The service will handle
+        # relevance-based context building and topic shifts.
+        is_ongoing_session = bool(payload.session_id and conversation_history)
+        result = await optimized_service.process_chatbot_query(
+            query=payload.query,
+            suppress_intro=is_ongoing_session,
+            conversation_history=conversation_history
+        )
+        # If this is a continued session, request the generator to suppress intros
+        if payload.session_id:
+            # Add a flag so downstream response uses no intro
+            result["suppressIntro"] = True
 
         # Add prompt logging if available
         if "prompt_id" in result and result.get("cot_analysis"):
@@ -140,20 +100,10 @@ async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db
         except Exception as e:
             print(f"[REDIS] Error storing conversation history: {e}")
         
-        # Cache the result (as JSON string, set expiration to 1 hour)
-        try:
-            redis_client.set(cache_key, json.dumps(result), ex=3600)
-        except Exception as e:
-            print(f"[REDIS] Error caching result: {e}")
-        # Log the response to Redis log DB
-        try:
-            log_key = f"chatbotlog:{int(time.time())}:{random.randint(1000,9999)}"
-            log_redis.set(log_key, json.dumps(result), ex=1800)
-        except Exception as e:
-            print(f"[REDIS] Error logging response: {e}")
+        # Do not cache responses
         
-        # Add sessionId to response
-        result["sessionId"] = session_id
+        # Add session_id to response (consistent with cached response and request schema)
+        result["session_id"] = session_id
         return result
 
     except Exception as e:

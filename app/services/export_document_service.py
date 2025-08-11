@@ -369,9 +369,11 @@ class ExportDocumentService:
 
         # Detect if the query is only asking for the list of required documents (not template/preview)
         query_lower = query.lower()
+        ask_template_keywords = ["buat", "buatkan", "generate", "tampilkan", "show", "lihat", "preview", "template"]
+        is_requesting_template = any(k in query_lower for k in ask_template_keywords)
         is_just_asking_documents = (
             any(keyword in query_lower for keyword in ["dokumen", "document", "surat", "form", "template", "persyaratan"]) and
-            not any(keyword in query_lower for keyword in ["buat", "buatkan", "generate", "tampilkan", "show", "lihat", "preview"])
+            not is_requesting_template
         )
 
         if is_just_asking_documents:
@@ -409,7 +411,7 @@ class ExportDocumentService:
 
         # Only show template if explicitly requested
         template_previews = []
-        if show_template and docs_auto:
+        if (show_template or is_requesting_template) and docs_auto:
             template_previews.append("\n===\nTEMPLATE DOKUMEN:\n")
             for doc in docs_auto:
                 if doc["template"] and doc["template"].get("template_dokumen"):

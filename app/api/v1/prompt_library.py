@@ -34,8 +34,7 @@ _prompt_cache = {}
 # Initialize Redis client (global, outside endpoint)
 redis_client = redis.Redis.from_url("redis://default:7HB9zBV8ZcStEv3S3uXIAzjncTlcxmtR@redis-14884.c292.ap-southeast-1-1.ec2.redns.redis-cloud.com:14884")
 
-# Use the new Redis configuration for logging
-log_redis = redis.Redis.from_url("redis://default:ENRwPubGW1VmpdNmr5kSJG7jqW7IdyKG@redis-16098.crce185.ap-seast-1-1.ec2.redns.redis-cloud.com:16098")
+# Note: keep Redis client if needed for other features, but disable response caching/logging
 
 @router.get("/", response_model=List[PromptLibraryResponse])
 async def get_prompts(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_async_db)):
@@ -84,7 +83,7 @@ async def create_embedding_optimized(text: str) -> List[float]:
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.embeddings.create(
             input=text,
-            model="text-embedding-ada-002"
+            model="text-embedding-3-small"
         )
         embedding = response.data[0].embedding
         _embedding_cache[cache_key] = embedding
@@ -159,7 +158,7 @@ async def extract_data_from_query_optimized(query: str, db: AsyncSession) -> dic
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = await asyncio.to_thread(
             client.chat.completions.create,
-            model="gpt-3.5-turbo",
+            model="gpt-5-nano",
             messages=[
                 {"role": "system", "content": "Kamu adalah asisten yang mengekstrak data dari teks dan mengembalikan dalam format JSON yang valid."},
                 {"role": "user", "content": extraction_prompt}
@@ -237,17 +236,7 @@ async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db
     Optimized chatbot endpoint with minimal delay and Redis caching
     """
     try:
-        cache_key = f"chatbot:{payload.query}"
-        cached = redis_client.get(cache_key)
-        if cached:
-            import json
-            response = json.loads(cached)
-            # Log the response to Redis log DB
-            log_key = f"chatbotlog:{int(time.time())}:{random.randint(1000,9999)}"
-            log_redis.set(log_key, json.dumps(response), ex=1800)
-            return response
-
-        # Use optimized chatbot service
+        # Always compute fresh result (no caching)
         optimized_service = OptimizedChatbotService(db)
         result = await optimized_service.process_chatbot_query(payload.query)
 
@@ -264,12 +253,7 @@ async def chatbot(payload: ChatbotQuery, db: AsyncSession = Depends(get_async_db
             except Exception as e:
                 print(f"[OPTIMIZED] Error logging prompt usage: {e}")
 
-        # Cache the result (as JSON string, set expiration to 1 hour)
-        import json
-        redis_client.set(cache_key, json.dumps(result), ex=3600)
-        # Log the response to Redis log DB
-        log_key = f"chatbotlog:{int(time.time())}:{random.randint(1000,9999)}"
-        log_redis.set(log_key, json.dumps(result), ex=1800)
+        # Return fresh result
         return result
 
     except Exception as e:
